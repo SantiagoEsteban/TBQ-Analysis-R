@@ -14,7 +14,6 @@ names(corptext) <- corpatrib$ID_UNIQUE
 corpus1 <- Corpus(VectorSource(corptext))
 shortcorpus <- Corpus(VectorSource(corptext[1:10]))
 
-a
 #Apply custom transformations with tm package
 #create the toSpace content transformer
 toSpace <- content_transformer(function(x, pattern){
@@ -49,7 +48,7 @@ shortcorpus2 <- tm_map(shortcorpus2, stripWhitespace)
 #Analysis with quanteda
 #Steps: 1) tokenize 
 #       2) remove all non related words(will get this from sas variables created manually)
-#       3) ngrams 1:3
+#       3) ngrams 1:4
 #       4) Stem?
 #       5) DocumentTermMatrix (see below)
 #       5) Analyze according to A gentle introduction to text mining using R and RTextTools: A Supervised Learning Package for Text Classification
@@ -61,7 +60,7 @@ metadoc(qcorpus, "language") <- "es"
 summary(qcorpus)
 
 #Crear la list de palabaras de remover, osea todas las que no sean TBQ TERMS
-tbqterms <- as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1) #TBQ TERMS
+tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
 library(plyr)
 '%nin%' <- Negate('%in%')
 nontbqterms <- lapply(texts(qcorpus), function(x) {
@@ -82,11 +81,40 @@ cleanshorttokenqcorpus <- removeFeatures(shorttokenqcorpus, stopwords=nontbqterm
 
 #Ngrams
 ngramcleantokenqcorpus <- ngrams(cleantokenqcorpus, 1:4)
+ngramstokenqcorpus <- quanteda::ngrams(tokenqcorpus, 1:4)
 
 #DFM
 tbqtermsstopwords <- as.character(read.csv('Terminos TBQ - a ignorar.txt', header=FALSE)$V1) #TBQ TERMS STOPWORDS
 dfmtokenqcorpus <- dfm(ngramcleantokenqcorpus, verbose=TRUE, language='spanish', 
-                       ignoredFeatures = tbqtermsstopwords)
+                       ignoredFeatures = tbqtermsstopwords) #DocTerm - Matrix in QUANTEDA
+
+
+#Esta DTM queda con 124 features que son las del diccionario, no se queda con los ngrams, solo monograms.
+qdictio <- dictionary(as.list(tbqterms))
+dfmtokenqcorpus2 <- dfm(ngramstokenqcorpus, verbose=TRUE, language='spanish', 
+                       dictionary=qdictio, valuetype = 'fixed') #DocTerm - Matrix in QUANTEDA
+    
+
+#Creating the DOC TERM MATRIX in tm, with the dictionary
+#Al aplciar el diccionario solo quedan los tokens solos, no quedan los ngrams
+# podria probar asi con los 124 tokens y usando modelos no lineales a ver como funciona (ara ver la interacción).
+# Sino mas arriba esta el codigo para volar todos los stopwords no tbq y armar los ngram con eso
+# Despues hay que limpiar por que queda lleno de no_no_no de_de_de y cosas asi.
+install.packages('RWeka')
+library(RWeka)
+
+dicttbq <- Corpus(VectorSource(tbqterms))
+
+#Create four ngram tokenizer function
+corpus3 <- corpus(corptext, dictionary=tbqterms)
+FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
+tdm <- DocumentTermMatrix(corpus2, control=list(dictionary=tbqterms))
+
+topfeatures(dfmtokenqcorpus2, verbose=FALSE)
+
+#Modeling
+
+
 #Ya podria pasar a tm o a RtexTools
 # HASTA ACA ESTA BIEN
 
