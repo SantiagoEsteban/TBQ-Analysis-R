@@ -92,14 +92,28 @@ dfmtokenqcorpus <- dfm(ngramcleantokenqcorpus, verbose=TRUE, language='spanish',
 #Esta DTM queda con 124 features que son las del diccionario, no se queda con los ngrams, solo monograms.
 qdictio <- dictionary(as.list(tbqterms))
 dfmtokenqcorpus2 <- dfm(ngramstokenqcorpus, verbose=TRUE, language='spanish', 
-                       dictionary=qdictio, valuetype = 'fixed') #DocTerm - Matrix in QUANTEDA
+                       dictionary=qdictio, valuetype = 'regex') #DocTerm - Matrix in QUANTEDA
     
+
+
+
 
 #Creating the DOC TERM MATRIX in tm, with the dictionary
 #Al aplciar el diccionario solo quedan los tokens solos, no quedan los ngrams
-# podria probar asi con los 124 tokens y usando modelos no lineales a ver como funciona (ara ver la interacción).
+# podria probar asi con los 124 tokens y usando modelos no lineales a ver como funciona para ver la interacción).
 # Sino mas arriba esta el codigo para volar todos los stopwords no tbq y armar los ngram con eso
 # Despues hay que limpiar por que queda lleno de no_no_no de_de_de y cosas asi.
+# En definitiva son *** formas de generar las variables: 
+#1. la 100% manual (lo que hice en SAS)
+#2. solo con las variable del diccionario (sin ngrams)
+#3. los ngrams usando stopwords (el diccionario de palabras no tbq), 
+#4. Tendria que probar si puedo aplciar el diccionario sobre los ngrams pero usarlo como regex por ejemplo o como glo
+# en vez de fixed y ver si eso ahce que se queden los ngrams en vez de los terminos sueltos del diccionario
+# 5. Usar todo el corpus para armar la dtm con ngrams, despues seleccionar variables usando el 
+# diccionario (selectfeatures creo q era) y ver que queda.
+
+#Todas las opciones deben pasar por un proceso de limpiez estadistico (nzerovar, removesparseterms, etc)
+
 install.packages('RWeka')
 library(RWeka)
 
