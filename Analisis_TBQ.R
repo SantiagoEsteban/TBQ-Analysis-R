@@ -90,13 +90,28 @@ dfmtokenqcorpus <- dfm(ngramcleantokenqcorpus, verbose=TRUE, language='spanish',
 
 
 #Esta DTM queda con 124 features que son las del diccionario, no se queda con los ngrams, solo monograms.
-qdictio <- dictionary(as.list(tbqterms))
+tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
+names(tbqterms) <- tbqterms
+qdictio <- dictionary(as.list(tbqtermsglob))
 dfmtokenqcorpus2 <- dfm(ngramstokenqcorpus, verbose=TRUE, language='spanish', 
-                       dictionary=qdictio, valuetype = 'regex') #DocTerm - Matrix in QUANTEDA
+                       dictionary=qdictio, valuetype = 'glob') #DocTerm - Matrix in QUANTEDA
     
 
+## NEUVO ENFOQUE PARA EL PUNTO 4 y 5 de abajo - FUNCIONA!!
+tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
+keepOnlyWords<-content_transformer(function(x,words) {
+    regmatches(x, 
+               gregexpr(paste0("\\b(",  paste(words,collapse="|"),"\\b)"), x)
+               , invert=T)<-" "
+    x
+})
 
-
+corpus2 <- tm_map(corpus2, keepOnlyWords, tbqterms)
+corpus2 <- tm_map(corpus2, stripWhitespace)
+corpus2 <- tm_map(corpus2, content_transformer(tolower))
+library(RWeka)
+FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
+tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer))
 
 #Creating the DOC TERM MATRIX in tm, with the dictionary
 #Al aplciar el diccionario solo quedan los tokens solos, no quedan los ngrams
