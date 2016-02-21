@@ -112,7 +112,10 @@ corpus2 <- tm_map(corpus2, content_transformer(tolower))
 library(RWeka)
 FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
 tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer))
-
+inspect(removeSparseTerms(tdm, 0.95))
+library(caret)
+tdmdataframe <- as.data.frame(as.matrix(tdm))
+tdmdataframenzv <- preProcess(tdmdataframe, method="nzv")
 #Creating the DOC TERM MATRIX in tm, with the dictionary
 #Al aplciar el diccionario solo quedan los tokens solos, no quedan los ngrams
 # podria probar asi con los 124 tokens y usando modelos no lineales a ver como funciona para ver la interacción).
