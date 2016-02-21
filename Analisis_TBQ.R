@@ -111,8 +111,14 @@ corpus2 <- tm_map(corpus2, stripWhitespace)
 corpus2 <- tm_map(corpus2, content_transformer(tolower))
 library(RWeka)
 FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
-tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer))
-inspect(removeSparseTerms(tdm, 0.95))
+tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer, 
+                                                weighting=function(x) weightTfIdf(x, normalize =FALSE)))
+inspect(removeSparseTerms(tdm, 0.99))[1:5,]
+freq <- colSums(as.matrix(tdm))
+ord <- order(freq,decreasing=TRUE)
+freq[head(ord)]
+freq[tail(ord)]
+
 library(caret)
 tdmdataframe <- as.data.frame(as.matrix(tdm))
 tdmdataframenzv <- preProcess(tdmdataframe, method="nzv")
