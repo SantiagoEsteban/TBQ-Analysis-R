@@ -26,8 +26,9 @@ corpus2 <- tm_map(corpus2, toSpace, ",")
 corpus2 <- tm_map(corpus2, toSpace, ";")
 corpus2 <- tm_map(corpus2, toSpace, "\\?")
 corpus2 <- tm_map(corpus2, toSpace, "!")
+corpus2 <- tm_map(corpus2, toSpace, ",")
 #corpus2 <- tm_map(corpus2, toSpace, " l ")
-corpus2 <- tm_map(corpus2, removePunctuation)
+#corpus2 <- tm_map(corpus2, removePunctuation(corpus2, preserve_intra_word_dashes = TRUE))
 corpus2 <- tm_map(corpus2, content_transformer(tolower))
 corpus2 <- tm_map(corpus2, removeNumbers)
 corpus2 <- tm_map(corpus2, stripWhitespace)
@@ -40,7 +41,7 @@ corpus2 <- tm_map(corpus2, stripWhitespace)
 #shortcorpus2 <- tm_map(shortcorpus2, toSpace, "\\?")
 #shortcorpus2 <- tm_map(shortcorpus2, toSpace, "!")
 #shortcorpus2 <- tm_map(shortcorpus2, toSpace, " l ")
-#shortcorpus2 <- tm_map(shortcorpus2, removePunctuation)
+#shortcorpus2 <- tm_map(shortcorpus2, removePunctuation(preserve_intra_word_dashes = TRUE))
 #shortcorpus2 <- tm_map(shortcorpus2, content_transformer(tolower))
 #shortcorpus2 <- tm_map(shortcorpus2, removeNumbers)
 #shortcorpus2 <- tm_map(shortcorpus2, stripWhitespace)
@@ -77,34 +78,32 @@ library(RWeka)
 FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
 Four_gram_tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer, 
                                                 weighting=function(x) weightTfIdf(x, normalize =FALSE)))
-#inspect(removeSparseTerms(Four_gram_tdm, 0.99))[1:5,]
-#freq <- colSums(as.matrix(Four_gram_tdm))
-#ord <- order(freq, decreasing=TRUE)
-#freq[head(ord)]
-#freq[tail(ord)]
 
 #Tidy up Four_gram_tdm
 #Removing sparse terms
 Four_gram_tdm
-Four_gram_tdm_nosparse <- removeSparseTerms(Four_gram_tdm, 0.99)
+Four_gram_tdm_nosparse <- removeSparseTerms(Four_gram_tdm, 0.989)
 
 #removing zero variance terms
 library(caret)
 library(tidyr)
 library(dplyr)
 Four_gram_tdm_df <- tbl_df(as.data.frame(as.matrix(Four_gram_tdm_nosparse)))
-nearZeroVar(Four_gram_tdm_df)
-Four_gram_tdm_df_zv <- preProcess(Four_gram_tdm_df, method="zv") #No terms with 0 var
+nearZeroVar(Four_gram_tdm_df) #too many
+
+nozero_Four_gram_tdm_df <- colSums(Four_gram_tdm_df) > 0
+Four_gram_tdm_df <- Four_gram_tdm_df[, nozero_Four_gram_tdm_df]
 
 #removing highly correlated
 library(corrplot)
 par(mfrow=c(1,1))
 Four_gram_tdm_df_cor <- cor(Four_gram_tdm_df)
-corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.1)
+corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.2)
 #Finding highly correlated variables
 highCorr <- findCorrelation(Four_gram_tdm_df_cor, cutoff = .75)
 highCorr
 Four_gram_tdm_df_nocor <- Four_gram_tdm_df[, -highCorr]
+corrplot(cor(Four_gram_tdm_df_nocor), order = "hclust", tl.cex=0.2)
 
 #LISTO HASTA ACA N-GRAMS
 
@@ -115,13 +114,13 @@ Four_gram_tdm_df_nocor <- Four_gram_tdm_df[, -highCorr]
 one_gram_tdm_tf <- DocumentTermMatrix(corpus2, control=list(wordLengths=c(1, Inf), dictionary=tbqterms))
 one_gram_tdm_tfidf <- DocumentTermMatrix(corpus2, control=list(wordLengths=c(1, Inf), dictionary=tbqterms, weighting=function(x) weightTfIdf(x, normalize =FALSE)))
 
-#removing NA columns
+#Analyzing frequencies
 one_gram_tdm_tf_df <- tbl_df(as.data.frame(as.matrix(one_gram_tdm_tf)))
 one_gram_tdm_tfidf_df <- tbl_df(as.data.frame(as.matrix(one_gram_tdm_tfidf)))
-
-#Analyzing frequencies
 freq_one_gram_tdm_tf_df <- colSums(one_gram_tdm_tf_df)
-freq_one_gram_tdm_tf_df
+nozero_freq_one_gram_tdm_tf_df <- freq_one_gram_tdm_tf_df > 0
+
+
 freq_one_gram_tdm_tfidf_df <- colSums(one_gram_tdm_tfidf_df)
 freq_one_gram_tdm_tfidf_df
 order(freq_one_gram_tdm_tf_df, decreasing=TRUE)
