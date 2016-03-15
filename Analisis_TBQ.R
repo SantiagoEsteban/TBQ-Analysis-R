@@ -12,7 +12,7 @@ colnames(corpatrib) <- c("ID_PACIENTE", "FECHA", "TBQ", "ID_UNIQUE")
 corptext <- as.character(corp$TEXTO)
 names(corptext) <- corpatrib$ID_UNIQUE
 corpus1 <- Corpus(VectorSource(corptext))
-shortcorpus <- Corpus(VectorSource(corptext[1:10]))
+#shortcorpus <- Corpus(VectorSource(corptext[1:10]))
 
 #Apply custom transformations with tm package
 #create the toSpace content transformer
@@ -26,26 +26,25 @@ corpus2 <- tm_map(corpus2, toSpace, ",")
 corpus2 <- tm_map(corpus2, toSpace, ";")
 corpus2 <- tm_map(corpus2, toSpace, "\\?")
 corpus2 <- tm_map(corpus2, toSpace, "!")
-corpus2 <- tm_map(corpus2, toSpace, " l ")
+#corpus2 <- tm_map(corpus2, toSpace, " l ")
 corpus2 <- tm_map(corpus2, removePunctuation)
 corpus2 <- tm_map(corpus2, content_transformer(tolower))
 corpus2 <- tm_map(corpus2, removeNumbers)
 corpus2 <- tm_map(corpus2, stripWhitespace)
 
-shortcorpus2 <- tm_map(shortcorpus, toSpace, ":")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, "\\.")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, "_x000D_\r\n")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, ",")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, ";")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, "\\?")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, "!")
-shortcorpus2 <- tm_map(shortcorpus2, toSpace, " l ")
-shortcorpus2 <- tm_map(shortcorpus2, removePunctuation)
-shortcorpus2 <- tm_map(shortcorpus2, content_transformer(tolower))
-shortcorpus2 <- tm_map(shortcorpus2, removeNumbers)
-shortcorpus2 <- tm_map(shortcorpus2, stripWhitespace)
+#shortcorpus2 <- tm_map(shortcorpus, toSpace, ":")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, "\\.")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, "_x000D_\r\n")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, ",")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, ";")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, "\\?")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, "!")
+#shortcorpus2 <- tm_map(shortcorpus2, toSpace, " l ")
+#shortcorpus2 <- tm_map(shortcorpus2, removePunctuation)
+#shortcorpus2 <- tm_map(shortcorpus2, content_transformer(tolower))
+#shortcorpus2 <- tm_map(shortcorpus2, removeNumbers)
+#shortcorpus2 <- tm_map(shortcorpus2, stripWhitespace)
 
-#Analysis with quanteda
 #Steps: 1) tokenize 
 #       2) remove all non related words(will get this from sas variables created manually)
 #       3) ngrams 1:4
@@ -53,52 +52,14 @@ shortcorpus2 <- tm_map(shortcorpus2, stripWhitespace)
 #       5) DocumentTermMatrix (see below)
 #       5) Analyze according to A gentle introduction to text mining using R and RTextTools: A Supervised Learning Package for Text Classification
 
-qcorpus <- corpus(corpus2) #quanteda corpus
-docvars(qcorpus, "TBQ") <- corp$TBQ
-docvars(qcorpus, "FECHA") <- corp$FECHA
-metadoc(qcorpus, "language") <- "es"
-summary(qcorpus)
 
-#Crear la list de palabaras de remover, osea todas las que no sean TBQ TERMS
+#Step 1
+#Create tbq terms list based on the qualitative analysis of clinical notes
 tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
-library(plyr)
-'%nin%' <- Negate('%in%')
-nontbqterms <- lapply(texts(qcorpus), function(x) {
-    t <- unlist(strsplit(x, " "))
-    t[t %nin% tbqterms]
-})
-nontbqterms2 <- unlist(nontbqterms)
 
 
-#Tokenization
-tokenqcorpus <- tokenize(texts(qcorpus), simplify=FALSE, removeHyphens=TRUE, verbose=TRUE)
-shortqcorpus <- corpus(shortcorpus2)
-shorttokenqcorpus <- tokenize(shortqcorpus)
-
-#Removing non TBQ terms - Funciona en el mas corto, hay q darle tiempo al largo o cortarlo
-cleantokenqcorpus <- removeFeatures(tokenqcorpus, stopwords=nontbqterms2, verbose=TRUE)
-cleanshorttokenqcorpus <- removeFeatures(shorttokenqcorpus, stopwords=nontbqterms2, verbose=TRUE)
-
-#Ngrams
-ngramcleantokenqcorpus <- ngrams(cleantokenqcorpus, 1:4)
-ngramstokenqcorpus <- quanteda::ngrams(tokenqcorpus, 1:4)
-
-#DFM
-tbqtermsstopwords <- as.character(read.csv('Terminos TBQ - a ignorar.txt', header=FALSE)$V1) #TBQ TERMS STOPWORDS
-dfmtokenqcorpus <- dfm(ngramcleantokenqcorpus, verbose=TRUE, language='spanish', 
-                       ignoredFeatures = tbqtermsstopwords) #DocTerm - Matrix in QUANTEDA
-
-
-#Esta DTM queda con 124 features que son las del diccionario, no se queda con los ngrams, solo monograms.
-tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
-names(tbqterms) <- tbqterms
-qdictio <- dictionary(as.list(tbqtermsglob))
-dfmtokenqcorpus2 <- dfm(ngramstokenqcorpus, verbose=TRUE, language='spanish', 
-                       dictionary=qdictio, valuetype = 'glob') #DocTerm - Matrix in QUANTEDA
-    
-
-## NEUVO ENFOQUE PARA EL PUNTO 4 y 5 de abajo - FUNCIONA!!
-tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
+#FOR N-GRAM VERSION 
+#Function that eliminates all non-listed words
 keepOnlyWords<-content_transformer(function(x,words) {
     regmatches(x, 
                gregexpr(paste0("\\b(",  paste(words,collapse="|"),"\\b)"), x)
@@ -106,18 +67,39 @@ keepOnlyWords<-content_transformer(function(x,words) {
     x
 })
 
+#Removing non-listed words
 corpus2 <- tm_map(corpus2, keepOnlyWords, tbqterms)
 corpus2 <- tm_map(corpus2, stripWhitespace)
 corpus2 <- tm_map(corpus2, content_transformer(tolower))
+
+#Creating 4-grams
 library(RWeka)
 FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
-tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer, 
+Four_gram_tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer, 
                                                 weighting=function(x) weightTfIdf(x, normalize =FALSE)))
-inspect(removeSparseTerms(tdm, 0.99))[1:5,]
-freq <- colSums(as.matrix(tdm))
-ord <- order(freq,decreasing=TRUE)
+inspect(removeSparseTerms(Four_gram_tdm, 0.99))[1:5,]
+freq <- colSums(as.matrix(Four_gram_tdm))
+ord <- order(freq, decreasing=TRUE)
 freq[head(ord)]
 freq[tail(ord)]
+
+#Tidy up Four_gram_tdm
+#Removing sparse terms
+Four_gram_tdm
+Four_gram_tdm_nosparse <- removeSparseTerms(Four_gram_tdm, 0.99)
+
+#removing zero variance terms
+library(caret)
+library(tidyr)
+library(dplyr)
+Four_gram_tdm_df <- tbl_df(as.data.frame(as.matrix(Four_gram_tdm_nosparse)))
+Four_gram_tdm_df_zv <- preProcess(Four_gram_tdm_df, method="zv") #No terms with 0 var
+
+
+#removing highly correlated
+library(corrplot)
+par(mfrow=c(1,1))
+corrplot(cor(Four_gram_tdm_df), order = "hclust", tl.cex=0.5)
 
 library(caret)
 tdmdataframe <- as.data.frame(as.matrix(tdm))
@@ -173,9 +155,50 @@ dfmtokenqcorpus <- dfm(tokenqcorpus, verbose=TRUE, keptFeatures = tbqterms, lang
 
 
 
+##########################################################################
+
+qcorpus <- corpus(corpus2) #quanteda corpus
+docvars(qcorpus, "TBQ") <- corp$TBQ
+docvars(qcorpus, "FECHA") <- corp$FECHA
+metadoc(qcorpus, "language") <- "es"
+summary(qcorpus)
+
+#Crear la list de palabaras de remover, osea todas las que no sean TBQ TERMS
+tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
+library(plyr)
+'%nin%' <- Negate('%in%')
+nontbqterms <- lapply(texts(qcorpus), function(x) {
+    t <- unlist(strsplit(x, " "))
+    t[t %nin% tbqterms]
+})
+nontbqterms2 <- unlist(nontbqterms)
 
 
+#Tokenization
+tokenqcorpus <- tokenize(texts(qcorpus), simplify=FALSE, removeHyphens=TRUE, verbose=TRUE)
+shortqcorpus <- corpus(shortcorpus2)
+shorttokenqcorpus <- tokenize(shortqcorpus)
 
+#Removing non TBQ terms - Funciona en el mas corto, hay q darle tiempo al largo o cortarlo
+cleantokenqcorpus <- removeFeatures(tokenqcorpus, stopwords=nontbqterms2, verbose=TRUE)
+cleanshorttokenqcorpus <- removeFeatures(shorttokenqcorpus, stopwords=nontbqterms2, verbose=TRUE)
+
+#Ngrams
+ngramcleantokenqcorpus <- ngrams(cleantokenqcorpus, 1:4)
+ngramstokenqcorpus <- quanteda::ngrams(tokenqcorpus, 1:4)
+
+#DFM
+tbqtermsstopwords <- as.character(read.csv('Terminos TBQ - a ignorar.txt', header=FALSE)$V1) #TBQ TERMS STOPWORDS
+dfmtokenqcorpus <- dfm(ngramcleantokenqcorpus, verbose=TRUE, language='spanish', 
+                       ignoredFeatures = tbqtermsstopwords) #DocTerm - Matrix in QUANTEDA
+
+
+#Esta DTM queda con 124 features que son las del diccionario, no se queda con los ngrams, solo monograms.
+tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
+names(tbqterms) <- tbqterms
+qdictio <- dictionary(as.list(tbqtermsglob))
+dfmtokenqcorpus2 <- dfm(ngramstokenqcorpus, verbose=TRUE, language='spanish', 
+                        dictionary=qdictio, valuetype = 'glob') #DocTerm - Matrix in QUANTEDA
 
 
 corpus2 <- tm_map(corpus2, stemDocument(corpus2, language= meta(corpus2, "spanish")))
