@@ -116,15 +116,25 @@ one_gram_tdm_tfidf <- DocumentTermMatrix(corpus2, control=list(wordLengths=c(1, 
 
 #Analyzing frequencies
 one_gram_tdm_tf_df <- tbl_df(as.data.frame(as.matrix(one_gram_tdm_tf)))
+nozero_freq_one_gram_tdm_tf_df <- colSums(one_gram_tdm_tf_df) > 0
+one_gram_tdm_tf_df <- one_gram_tdm_tf_df[,nozero_freq_one_gram_tdm_tf_df]
+
 one_gram_tdm_tfidf_df <- tbl_df(as.data.frame(as.matrix(one_gram_tdm_tfidf)))
-freq_one_gram_tdm_tf_df <- colSums(one_gram_tdm_tf_df)
-nozero_freq_one_gram_tdm_tf_df <- freq_one_gram_tdm_tf_df > 0
+nozero_freq_one_gram_tdm_tfidf_df <- colSums(one_gram_tdm_tfidf_df) > 0
+one_gram_tdm_tfidf_df <- one_gram_tdm_tfidf_df[,nozero_freq_one_gram_tdm_tfidf_df]
 
+#removing highly correlated
+one_gram_tdm_tf_df_cor <- cor(one_gram_tdm_tf_df)
+corrplot(one_gram_tdm_tf_df_cor, order = "hclust", tl.cex=0.2)
+#Finding highly correlated variables
+highCorr <- findCorrelation(one_gram_tdm_tf_df_cor, cutoff = .75)
+highCorr
 
-freq_one_gram_tdm_tfidf_df <- colSums(one_gram_tdm_tfidf_df)
-freq_one_gram_tdm_tfidf_df
-order(freq_one_gram_tdm_tf_df, decreasing=TRUE)
-order(freq_one_gram_tdm_tfidf_df, decreasing=TRUE)
+one_gram_tdm_tfidf_df_cor <- cor(one_gram_tdm_tfidf_df)
+corrplot(one_gram_tdm_tfidf_df_cor, order = "hclust", tl.cex=0.2)
+#Finding highly correlated variables
+highCorr <- findCorrelation(one_gram_tdm_tfidf_df_cor, cutoff = .75)
+highCorr
 
 ###HASTA ACA One-GRAMS con TF weights and TF/ITF
 
