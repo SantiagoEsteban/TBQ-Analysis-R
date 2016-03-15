@@ -138,18 +138,23 @@ manual_grams <- select(manual_grams, -FECHA, -TEXTO)
 
 #Analyzing frquencies
 freq_manual_grams <- colSums(manual_grams)
-freq_manual_grams
+nozero_freq_manual_grams <- freq_manual_grams > 0
+sum(nozero_freq_manual_grams)
+nozero_manual_grams <- manual_grams[, nozero_freq_manual_grams]
 
 #Near zero var
-nearZeroVar(manual_grams)
+nearZeroVar(nozero_manual_grams)
 
 #Correlations
-manual_grams_cor <- cor(select(manual_grams, -TBQ, -notbqdata, -ID_PACIENTE, -notbqvar, -total))
-corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.1)
+manual_grams_cor <- cor(select(nozero_manual_grams, -TBQ, -notbqdata, -ID_PACIENTE, -notbqvar, -total))
+corrplot(manual_grams_cor, order = "hclust", tl.cex=0.5)
 #Finding highly correlated variables
-highCorr <- findCorrelation(Four_gram_tdm_df_cor, cutoff = .75)
-highCorr
-Four_gram_tdm_df_nocor <- Four_gram_tdm_df[, -highCorr]
+findCorrelation(manual_grams_cor, cutoff = .75) #no correlations above 0.75
+
+###############
+#DONE manual_grams
+###############
+
 
 
 library(caret)
