@@ -77,11 +77,11 @@ library(RWeka)
 FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
 Four_gram_tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer, 
                                                 weighting=function(x) weightTfIdf(x, normalize =FALSE)))
-inspect(removeSparseTerms(Four_gram_tdm, 0.99))[1:5,]
-freq <- colSums(as.matrix(Four_gram_tdm))
-ord <- order(freq, decreasing=TRUE)
-freq[head(ord)]
-freq[tail(ord)]
+#inspect(removeSparseTerms(Four_gram_tdm, 0.99))[1:5,]
+#freq <- colSums(as.matrix(Four_gram_tdm))
+#ord <- order(freq, decreasing=TRUE)
+#freq[head(ord)]
+#freq[tail(ord)]
 
 #Tidy up Four_gram_tdm
 #Removing sparse terms
@@ -93,13 +93,64 @@ library(caret)
 library(tidyr)
 library(dplyr)
 Four_gram_tdm_df <- tbl_df(as.data.frame(as.matrix(Four_gram_tdm_nosparse)))
+nearZeroVar(Four_gram_tdm_df)
 Four_gram_tdm_df_zv <- preProcess(Four_gram_tdm_df, method="zv") #No terms with 0 var
-
 
 #removing highly correlated
 library(corrplot)
 par(mfrow=c(1,1))
-corrplot(cor(Four_gram_tdm_df), order = "hclust", tl.cex=0.5)
+Four_gram_tdm_df_cor <- cor(Four_gram_tdm_df)
+corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.1)
+#Finding highly correlated variables
+highCorr <- findCorrelation(Four_gram_tdm_df_cor, cutoff = .75)
+highCorr
+Four_gram_tdm_df_nocor <- Four_gram_tdm_df[, -highCorr]
+
+#LISTO HASTA ACA N-GRAMS
+
+
+##############################
+#Generar tdm solo con los terminos sueltos, sin n-grams
+##############################
+one_gram_tdm_tf <- DocumentTermMatrix(corpus2, control=list(wordLengths=c(1, Inf), dictionary=tbqterms))
+one_gram_tdm_tfidf <- DocumentTermMatrix(corpus2, control=list(wordLengths=c(1, Inf), dictionary=tbqterms, weighting=function(x) weightTfIdf(x, normalize =FALSE)))
+
+#removing NA columns
+one_gram_tdm_tf_df <- tbl_df(as.data.frame(as.matrix(one_gram_tdm_tf)))
+one_gram_tdm_tfidf_df <- tbl_df(as.data.frame(as.matrix(one_gram_tdm_tfidf)))
+
+#Analyzing frequencies
+freq_one_gram_tdm_tf_df <- colSums(one_gram_tdm_tf_df)
+freq_one_gram_tdm_tf_df
+freq_one_gram_tdm_tfidf_df <- colSums(one_gram_tdm_tfidf_df)
+freq_one_gram_tdm_tfidf_df
+order(freq_one_gram_tdm_tf_df, decreasing=TRUE)
+order(freq_one_gram_tdm_tfidf_df, decreasing=TRUE)
+
+###HASTA ACA One-GRAMS con TF weights and TF/ITF
+
+##################
+#Import manual dataset created with REGEX SAS
+##################
+
+manual_grams <- as.data.frame(read_excel('tbqcompleto2015_FINAL_nodups2.xlsx'))
+manual_grams <- select(manual_grams, -FECHA, -TEXTO)
+
+#Analyzing frquencies
+freq_manual_grams <- colSums(manual_grams)
+freq_manual_grams
+
+#Near zero var
+nearZeroVar(manual_grams)
+
+#Correlations
+manual_grams_cor <- cor(select(manual_grams, -TBQ, -notbqdata, -ID_PACIENTE, -notbqvar, -total))
+corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.1)
+#Finding highly correlated variables
+highCorr <- findCorrelation(Four_gram_tdm_df_cor, cutoff = .75)
+highCorr
+Four_gram_tdm_df_nocor <- Four_gram_tdm_df[, -highCorr]
+
 
 library(caret)
 tdmdataframe <- as.data.frame(as.matrix(tdm))
