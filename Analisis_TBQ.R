@@ -6,6 +6,39 @@ library(RTextTools)
 library(NLP)
 library(kernlab)
 library(quanteda)
+library(dplyr)
+library(tidyr)
+library(RWeka)
+library(caret)
+library(corrplot)
+
+##################
+#Import manual dataset created with REGEX SAS
+##################
+
+manual_grams <- as.data.frame(read_excel('tbqcompleto2015_FINAL_nodups2.xlsx'))
+manual_grams <- select(manual_grams, -FECHA, -TEXTO)
+
+#Analyzing frequencies
+freq_manual_grams <- colSums(manual_grams)
+nozero_freq_manual_grams <- freq_manual_grams > 0
+sum(nozero_freq_manual_grams)
+nozero_manual_grams <- manual_grams[, nozero_freq_manual_grams]
+
+#Near zero var
+nearZeroVar(nozero_manual_grams)
+
+#Correlations
+manual_grams_cor <- cor(select(nozero_manual_grams, -TBQ, -notbqdata, -ID_PACIENTE, -notbqvar, -total))
+#corrplot(manual_grams_cor, order = "hclust", tl.cex=0.5)
+#Finding highly correlated variables
+findCorrelation(manual_grams_cor, cutoff = .75) #no correlations above 0.75
+
+#############
+#CORPUS
+#############
+
+
 corp <- read_excel('tbqcompleto2015_validar3_nodups1.xlsx')
 corpatrib <- data.frame(cbind(corp[,1:2], corp[,4], seq(1:length(corp[,1]))))
 colnames(corpatrib) <- c("ID_PACIENTE", "FECHA", "TBQ", "ID_UNIQUE")
@@ -58,8 +91,9 @@ corpus2 <- tm_map(corpus2, stripWhitespace)
 #Create tbq terms list based on the qualitative analysis of clinical notes
 tbqterms <- unique(as.character(read.csv('Terminos TBQ.txt', header=FALSE)$V1)) #TBQ TERMS
 
-
-#FOR N-GRAM VERSION 
+###################
+#FOR N-GRAM VERSION
+###################
 #Function that eliminates all non-listed words
 keepOnlyWords<-content_transformer(function(x,words) {
     regmatches(x, 
@@ -74,7 +108,6 @@ corpus2 <- tm_map(corpus2, stripWhitespace)
 corpus2 <- tm_map(corpus2, content_transformer(tolower))
 
 #Creating 4-grams
-library(RWeka)
 FourgramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 4))
 Four_gram_tdm <- DocumentTermMatrix(corpus2, control=list(tokenize=FourgramTokenizer, 
                                                 weighting=function(x) weightTfIdf(x, normalize =FALSE)))
@@ -85,9 +118,6 @@ Four_gram_tdm
 Four_gram_tdm_nosparse <- removeSparseTerms(Four_gram_tdm, 0.989)
 
 #removing zero variance terms
-library(caret)
-library(tidyr)
-library(dplyr)
 Four_gram_tdm_df <- tbl_df(as.data.frame(as.matrix(Four_gram_tdm_nosparse)))
 nearZeroVar(Four_gram_tdm_df) #too many
 
@@ -95,15 +125,17 @@ nozero_Four_gram_tdm_df <- colSums(Four_gram_tdm_df) > 0
 Four_gram_tdm_df <- Four_gram_tdm_df[, nozero_Four_gram_tdm_df]
 
 #removing highly correlated
-library(corrplot)
 par(mfrow=c(1,1))
 Four_gram_tdm_df_cor <- cor(Four_gram_tdm_df)
-corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.2)
+#corrplot(Four_gram_tdm_df_cor, order = "hclust", tl.cex=0.2)
 #Finding highly correlated variables
 highCorr <- findCorrelation(Four_gram_tdm_df_cor, cutoff = .75)
 highCorr
 Four_gram_tdm_df_nocor <- Four_gram_tdm_df[, -highCorr]
-corrplot(cor(Four_gram_tdm_df_nocor), order = "hclust", tl.cex=0.2)
+#corrplot(cor(Four_gram_tdm_df_nocor), order = "hclust", tl.cex=0.2)
+
+#Adding outcome
+Four_gram_tdm_outcome <- cbind(manual_grams$TBQ, Four_gram_tdm_df_nocor) 
 
 #LISTO HASTA ACA N-GRAMS
 
@@ -125,16 +157,20 @@ one_gram_tdm_tfidf_df <- one_gram_tdm_tfidf_df[,nozero_freq_one_gram_tdm_tfidf_d
 
 #removing highly correlated
 one_gram_tdm_tf_df_cor <- cor(one_gram_tdm_tf_df)
-corrplot(one_gram_tdm_tf_df_cor, order = "hclust", tl.cex=0.2)
+#corrplot(one_gram_tdm_tf_df_cor, order = "hclust", tl.cex=0.2)
 #Finding highly correlated variables
 highCorr <- findCorrelation(one_gram_tdm_tf_df_cor, cutoff = .75)
 highCorr
 
 one_gram_tdm_tfidf_df_cor <- cor(one_gram_tdm_tfidf_df)
-corrplot(one_gram_tdm_tfidf_df_cor, order = "hclust", tl.cex=0.2)
+#corrplot(one_gram_tdm_tfidf_df_cor, order = "hclust", tl.cex=0.2)
 #Finding highly correlated variables
 highCorr <- findCorrelation(one_gram_tdm_tfidf_df_cor, cutoff = .75)
 highCorr
+
+#Adding outcome
+one_gram_tdm_tfidf_outcome <- cbind(manual_grams$TBQ, one_gram_tdm_tfidf_df)
+one_gram_tdm_tf_df_outcome <- cbind(manual_grams$TBQ, one_gram_tdm_tf_df)
 
 ###HASTA ACA One-GRAMS con TF weights and TF/ITF
 
@@ -156,16 +192,30 @@ nearZeroVar(nozero_manual_grams)
 
 #Correlations
 manual_grams_cor <- cor(select(nozero_manual_grams, -TBQ, -notbqdata, -ID_PACIENTE, -notbqvar, -total))
-corrplot(manual_grams_cor, order = "hclust", tl.cex=0.5)
+#corrplot(manual_grams_cor, order = "hclust", tl.cex=0.5)
 #Finding highly correlated variables
 findCorrelation(manual_grams_cor, cutoff = .75) #no correlations above 0.75
 
 ###############
-#DONE manual_grams
-###############
+#BASE DE PTES MISSING.
+##############
+missing <- read_excel('notbqdata2015completo.xlsx')
+missing <- tbl_df(missing[1:1819,])
 
-# FALTARIA VER LA BASE DE PTES MISSING.
+missing2 <- tbl_df(read_excel('PMA0719336_cv.xlsx')) %>% select(ID_PACIENTE, antec_cv) %>% full_join(missing, by='ID_PACIENTE')
+missing2 <- missing2[!duplicated(missing2),]
+missing3 <- tbl_df(read_excel('PMA0719336_cerebv.xlsx')) %>% select(ID_PACIENTE, antec_cerebro) %>% full_join(missing2, by='ID_PACIENTE')
+missing3 <- missing3[!duplicated(missing3),]
 
+#Analyzing frequencies
+freq_missing3 <- colSums(missing3, na.rm = T)
+nozer_freq_missing3 <- freq_missing3 > 0 #No 0 columns
+
+#Analyzing correlation
+missing3_cor <- cor(select(missing3, -ID_PACIENTE, -tbqact2015, -antecedentetotal, -totalevolprimera, -totalevoluciones, -sumantecedentetotal, -total_int))
+corrplot(missing3_cor, order = "hclust", tl.cex=0.6)
+#Finding highly correlated variables
+highCorr <- findCorrelation(missing3_cor, cutoff = .75) #Solo MED_EVOL_PREQX y PREQX
 
 ###############
 #ANALYSIS PLAN
