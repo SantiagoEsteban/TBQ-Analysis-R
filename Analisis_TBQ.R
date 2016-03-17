@@ -209,17 +209,70 @@ missing3 <- missing3[!duplicated(missing3),]
 
 #Analyzing frequencies
 freq_missing3 <- colSums(missing3, na.rm = T)
-nozer_freq_missing3 <- freq_missing3 > 0 #No 0 columns
+nozero_freq_missing3 <- freq_missing3 > 0 #No 0 columns
 
 #Analyzing correlation
 missing3_cor <- cor(select(missing3, -ID_PACIENTE, -tbqact2015, -antecedentetotal, -totalevolprimera, -totalevoluciones, -sumantecedentetotal, -total_int))
-corrplot(missing3_cor, order = "hclust", tl.cex=0.6)
+#corrplot(missing3_cor, order = "hclust", tl.cex=0.6)
 #Finding highly correlated variables
 highCorr <- findCorrelation(missing3_cor, cutoff = .75) #Solo MED_EVOL_PREQX y PREQX
 
 ###############
 #ANALYSIS PLAN
 ###############
-# Unir las DTM con los outcomes
 # Algorimot por separado para "evol sin datos sobre tbq"? o un solo algoritmo con 3 outcome con 3 niveles?
 # Evaluar los algoritmos para clasificacion: rand forests, boosted trees, SVM, neural networks, C5.
+
+#Random Forests
+#nozero_manual_grams
+#one_gram_tdm_tfidf_outcome 
+#one_gram_tdm_tf_outcome
+#Four_gram_tdm_outcome
+#missing3
+
+#Manual grams
+library(caret)
+set.seed(123)
+length(nozero_manual_grams)
+nozero_manual_grams$TBQ <- as.factor(nozero_manual_grams$TBQ)
+rf.trctrl.oob <- trainControl(method='oob', classProbs = T, summaryFunction = twoClassSummary,
+                              allowParallel = T, verboseIter=T)
+rf.trctrl.boot632 <- trainControl(method='boot632', classProbs = T, summaryFunction = multiClassSummary,
+                              allowParallel = T, verboseIter=T)
+
+mtry_grid <- expand.grid(mtry=c(1, sqrt(142), log(143), log(142/2)))
+mtry_grid2 <- expand.grid(mtry=sqrt(142))
+
+nozero_manual_grams_TBQ <- filter(nozero_manual_grams, notbqdata==0) %>% select(-notbqdata, -ID_PACIENTE)
+nozero_manual_grams_TBQ$TBQ <- as.factor(factor(nozero_manual_grams_TBQ$TBQ))
+nozero_manual_grams_TBQ$TBQ <- make.names(nozero_manual_grams_TBQ$TBQ)
+
+
+TBQ_train <- createDataPartition(nozero_manual_grams_TBQ$TBQ,
+                                                     p=.8,
+                                                     list=F,
+                                                     times=1)
+nozero_manual_grams_TBQ_train <- nozero_manual_grams_TBQ[TBQ_train,]
+nozero_manual_grams_TBQ_test <- nozero_manual_grams_TBQ[-TBQ_train,]
+
+rf.oob.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
+                                    TBQ~.,
+                                    method='parRF',
+                                    trControl=rf.trctrl.oob,
+                                    tuneGrid=mtry_grid,
+                                    metric='ROC',
+                                    maximize=T,
+                                    importance=T,
+                                    ntree=1000
+                                    )
+
+rf.boot632.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
+                                    TBQ~.,
+                                    method='parRF',
+                                    trControl=rf.trctrl.boot632,
+                                    tuneGrid=mtry_grid,
+                                    metric='ROC',
+                                    maximize=T,
+                                    importance=T,
+                                    ntree=1000
+)
