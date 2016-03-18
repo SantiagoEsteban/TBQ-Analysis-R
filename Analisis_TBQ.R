@@ -170,7 +170,9 @@ highCorr
 
 #Adding outcome
 one_gram_tdm_tfidf_outcome <- cbind(manual_grams$TBQ, one_gram_tdm_tfidf_df)
+one_gram_tdm_tfidf_outcome <- cbind(manual_grams$notbqdata, one_gram_tdm_tfidf_outcome)
 one_gram_tdm_tf_df_outcome <- cbind(manual_grams$TBQ, one_gram_tdm_tf_df)
+one_gram_tdm_tf_df_outcome <- cbind(manual_grams$notbqdata, one_gram_tdm_tf_df_outcome)
 
 ###HASTA ACA One-GRAMS con TF weights and TF/ITF
 
@@ -324,3 +326,39 @@ rf.cv.nozero_manual_grams_TBQornot <- train(data=nozero_manual_grams_TBQornot_tr
 
 test_results2 <- predict(rf.cv.nozero_manual_grams_TBQornot, nozero_manual_grams_TBQornot_test)
 confusionMatrix(test_results2, nozero_manual_grams_TBQornot_test$notbqdata)
+
+#One_grams
+#one_gram_tdm_tfidf_outcome 
+#one_gram_tdm_tf_outcome
+
+colnames(one_gram_tdm_tfidf_outcome)[1] <- 'notbqdata'
+colnames(one_gram_tdm_tfidf_outcome)[2] <- 'TBQ'
+
+one_gram_tdm_tfidf_outcome$TBQ <- make.names(as.factor(one_gram_tdm_tfidf_outcome$TBQ))
+one_gram_tdm_tfidf_outcome$notbqdata <- make.names(as.factor(one_gram_tdm_tfidf_outcome$notbqdata))
+
+one_grams_TBQornot_train <- createDataPartition(one_gram_tdm_tfidf_outcome$notbqdata,
+                                      p=.8,
+                                      list=F,
+                                      times=1)
+one_gram_tdm_tfidf_outcome_TBQornot_train <- one_gram_tdm_tfidf_outcome[one_grams_TBQornot_train,]
+one_gram_tdm_tfidf_outcome_TBQornot_test <- one_gram_tdm_tfidf_outcome[-one_grams_TBQornot_train,]
+
+#one_gram_tdm_tfidf_outcome_TBQornot_train <- one_gram_tdm_tfidf_outcome_TBQornot_train %>% select(-manual_grams$TBQ)
+
+
+rf.trctrl.cv.TBQornot_one_gram <- trainControl(method='cv', number=2, classProbs = T, summaryFunction = multiClassSummary,
+                                      allowParallel = T, verboseIter=T)
+
+mtry_grid_TBQornot_one_gram <- expand.grid(mtry=c(log(119),sqrt(119), sqrt(119)*4))
+
+rf.cv.one_gram_tdm_tfidf_outcome_TBQornot <- train(data=one_gram_tdm_tfidf_outcome_TBQornot_train,
+                                            notbqdata~. -TBQ,
+                                            method='parRF',
+                                            trControl=rf.trctrl.cv.TBQornot_one_gram,
+                                            tuneGrid=mtry_grid_TBQornot_one_gram,
+                                            metric='ROC',
+                                            maximize=T,
+                                            importance=T,
+                                            ntree=1000
+)
