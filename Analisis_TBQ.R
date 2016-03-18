@@ -11,7 +11,9 @@ library(tidyr)
 library(RWeka)
 library(caret)
 library(corrplot)
-
+library(doSNOW)
+cl<-makeCluster(2) #change the 2 to your number of CPU cores
+registerDoSNOW(cl)
 ##################
 #Import manual dataset created with REGEX SAS
 ##################
@@ -293,6 +295,9 @@ rf.cv2.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
                                    importance=T,
                                    ntree=1000
 )
+varImp.rf.cv2.nozero_manual_grams <- varImp(rf.cv2.nozero_manual_grams)
+plot(varImp.rf.cv2.nozero_manual_grams)
+
 test_results <- predict(rf.cv2.nozero_manual_grams, nozero_manual_grams_TBQ_test)
 confusionMatrix(test_results, nozero_manual_grams_TBQ_test$TBQ)
 
@@ -326,6 +331,36 @@ rf.cv.nozero_manual_grams_TBQornot <- train(data=nozero_manual_grams_TBQornot_tr
 
 test_results2 <- predict(rf.cv.nozero_manual_grams_TBQornot, nozero_manual_grams_TBQornot_test)
 confusionMatrix(test_results2, nozero_manual_grams_TBQornot_test$notbqdata)
+
+#Manual_grams with three outcomes
+
+nozero_manual_grams_3outcomes <- nozero_manual_grams
+nozero_manual_grams_3outcomes$TBQ <- make.names(nozero_manual_grams_3outcomes$TBQ)
+
+three_outcomes_train <- createDataPartition(nozero_manual_grams_3outcomes$TBQ,
+                                      p=.8,
+                                      list=F,
+                                      times=1)
+nozero_manual_grams_3outcomes_train <- nozero_manual_grams_3outcomes[three_outcomes_train,]
+nozero_manual_grams_3outcomes_test <- nozero_manual_grams_3outcomes[-three_outcomes_train,]
+
+rf.trctrl.cv.3outcomes <- trainControl(method='cv', number=2, classProbs = T, summaryFunction = multiClassSummary,
+                                      allowParallel = T, verboseIter=T)
+
+mtry_grid_3outcomes <- expand.grid(mtry=c(sqrt(142)))
+
+rf.cv.nozero_manual_grams_3outcomes <- train(data=nozero_manual_grams_3outcomes_train,
+                                            TBQ~. -ID_PACIENTE -notbqdata,
+                                            method='parRF',
+                                            trControl=rf.trctrl.cv.3outcomes,
+                                            tuneGrid=mtry_grid_3outcomes,
+                                            metric='Accuracy',
+                                            maximize=T,
+                                            importance=T,
+                                            ntree=1000
+)
+test_results3 <- predict(rf.cv.nozero_manual_grams_3outcomes, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results3, nozero_manual_grams_3outcomes_test$TBQ)
 
 #One_grams
 #one_gram_tdm_tfidf_outcome 
@@ -362,3 +397,4 @@ rf.cv.one_gram_tdm_tfidf_outcome_TBQornot <- train(data=one_gram_tdm_tfidf_outco
                                             importance=T,
                                             ntree=1000
 )
+importance(rf.cv.one_gram_tdm_tfidf_outcome_TBQornot)
