@@ -291,9 +291,36 @@ rf.cv2.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
                                    importance=T,
                                    ntree=1000
 )
-test_results <- predict(rf.cv2.nozero_manual_grams, nozero_manual_grams_TBQ_test, type='prob')
-test_results$obs <- nozero_manual_grams_TBQ_test$TBQ
-head(test_results)
-test_results$pred <- predict(rf.cv2.nozero_manual_grams, nozero_manual_grams_TBQ_test)
-multiClassSummary(test_results, lev = levels(test_results$obs))
-mnLogLoss(test_results, lev = levels(test_results$obs))
+test_results <- predict(rf.cv2.nozero_manual_grams, nozero_manual_grams_TBQ_test)
+confusionMatrix(test_results, nozero_manual_grams_TBQ_test$TBQ)
+
+#Manual_grams tbq data si o no
+
+nozero_manual_grams_TBQornot<- select(nozero_manual_grams, -ID_PACIENTE, -TBQ)
+nozero_manual_grams_TBQornot$notbqdata <- make.names(as.factor(nozero_manual_grams_TBQornot$notbqdata))
+
+TBQornot_train <- createDataPartition(nozero_manual_grams_TBQornot$notbqdata,
+                                 p=.8,
+                                 list=F,
+                                 times=1)
+nozero_manual_grams_TBQornot_train <- nozero_manual_grams_TBQornot[TBQornot_train,]
+nozero_manual_grams_TBQornot_test <- nozero_manual_grams_TBQornot[-TBQornot_train,]
+
+rf.trctrl.cv.TBQornot <- trainControl(method='cv', number=2, classProbs = T, summaryFunction = multiClassSummary,
+                             allowParallel = T, verboseIter=T)
+
+mtry_grid_TBQornot <- expand.grid(mtry=c(sqrt(142), sqrt(142)*2, sqrt(142)*3, sqrt(142)*4))
+
+rf.cv.nozero_manual_grams_TBQornot <- train(data=nozero_manual_grams_TBQornot_train,
+                                    notbqdata~.,
+                                    method='parRF',
+                                    trControl=rf.trctrl.cv.TBQornot,
+                                    tuneGrid=mtry_grid_TBQornot,
+                                    metric='ROC',
+                                    maximize=T,
+                                    importance=T,
+                                    ntree=1000
+)
+
+test_results2 <- predict(rf.cv.nozero_manual_grams_TBQornot, nozero_manual_grams_TBQornot_test)
+confusionMatrix(test_results2, nozero_manual_grams_TBQornot_test$notbqdata)
