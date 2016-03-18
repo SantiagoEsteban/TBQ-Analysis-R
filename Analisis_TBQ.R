@@ -12,7 +12,7 @@ library(RWeka)
 library(caret)
 library(corrplot)
 library(doSNOW)
-cl<-makeCluster(2) #change the 2 to your number of CPU cores
+cl<-makeCluster(4) #change the 2 to your number of CPU cores
 registerDoSNOW(cl)
 ##################
 #Import manual dataset created with REGEX SAS
@@ -398,3 +398,37 @@ rf.cv.one_gram_tdm_tfidf_outcome_TBQornot <- train(data=one_gram_tdm_tfidf_outco
                                             ntree=1000
 )
 importance(rf.cv.one_gram_tdm_tfidf_outcome_TBQornot)
+
+#######################
+# 4_grams
+#######################
+
+
+Four_gram_tdm_outcome_3outcomes <- Four_gram_tdm_outcome
+colnames(Four_gram_tdm_outcome_3outcomes)[1] <- "TBQ" 
+Four_gram_tdm_outcome_3outcomes$TBQ <- make.names(Four_gram_tdm_outcome_3outcomes$TBQ)
+
+Four_gram_three_outcomes_train <- createDataPartition(Four_gram_tdm_outcome_3outcomes$TBQ,
+                                            p=.8,
+                                            list=F,
+                                            times=1)
+Four_gram_tdm_outcome_3outcomes_train <- Four_gram_tdm_outcome_3outcomes[Four_gram_three_outcomes_train,]
+Four_gram_tdm_outcome_3outcomes_test <- Four_gram_tdm_outcome_3outcomes[-Four_gram_three_outcomes_train,]
+
+rf.trctrl.cv.Four_gram <- trainControl(method='cv', number=2, classProbs = T, summaryFunction = multiClassSummary,
+                                       allowParallel = T, verboseIter=T)
+
+mtry_grid_Four_gram_3outcomes <- expand.grid(mtry=c(sqrt(439)))
+
+rf.cv.our_gram_tdm_outcome_3outcomes <- train(data=Four_gram_tdm_outcome_3outcomes_train,
+                                             TBQ~.,
+                                             method='parRF',
+                                             trControl=rf.trctrl.cv.Four_gram,
+                                             tuneGrid=mtry_grid_Four_gram_3outcomes,
+                                             metric='Accuracy',
+                                             maximize=T,
+                                             importance=T,
+                                             ntree=1000
+)
+test_results3 <- predict(rf.cv.nozero_manual_grams_3outcomes, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results3, nozero_manual_grams_3outcomes_test$TBQ)
