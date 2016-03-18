@@ -235,13 +235,17 @@ library(caret)
 set.seed(123)
 length(nozero_manual_grams)
 nozero_manual_grams$TBQ <- as.factor(nozero_manual_grams$TBQ)
-rf.trctrl.oob <- trainControl(method='oob', classProbs = T, summaryFunction = twoClassSummary,
+rf.trctrl.oob <- trainControl(method='oob', classProbs = T, summaryFunction = multiClassSummary,
                               allowParallel = T, verboseIter=T)
 rf.trctrl.boot632 <- trainControl(method='boot632', classProbs = T, summaryFunction = multiClassSummary,
                               allowParallel = T, verboseIter=T)
 
+rf.trctrl.cv <- trainControl(method='cv', number=10, classProbs = T, summaryFunction = multiClassSummary,
+                                  allowParallel = T, verboseIter=T)
+
 mtry_grid <- expand.grid(mtry=c(1, sqrt(142), log(143), log(142/2)))
-mtry_grid2 <- expand.grid(mtry=sqrt(142))
+mtry_grid2 <- expand.grid(mtry=c(sqrt(142))
+mtry_grid3 <- expand.grid(mtry=c(sqrt(142)*2, sqrt(142)*3, sqrt(142)*4))
 
 nozero_manual_grams_TBQ <- filter(nozero_manual_grams, notbqdata==0) %>% select(-notbqdata, -ID_PACIENTE)
 nozero_manual_grams_TBQ$TBQ <- as.factor(factor(nozero_manual_grams_TBQ$TBQ))
@@ -266,13 +270,30 @@ rf.oob.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
                                     ntree=1000
                                     )
 
-rf.boot632.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
+rf.cv.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
                                     TBQ~.,
                                     method='parRF',
-                                    trControl=rf.trctrl.boot632,
-                                    tuneGrid=mtry_grid,
+                                    trControl=rf.trctrl.cv,
+                                    tuneGrid=mtry_grid2,
                                     metric='ROC',
                                     maximize=T,
                                     importance=T,
                                     ntree=1000
 )
+
+rf.cv2.nozero_manual_grams <- train(data=nozero_manual_grams_TBQ_train,
+                                   TBQ~.,
+                                   method='parRF',
+                                   trControl=rf.trctrl.cv,
+                                   tuneGrid=mtry_grid3,
+                                   metric='ROC',
+                                   maximize=T,
+                                   importance=T,
+                                   ntree=1000
+)
+test_results <- predict(rf.cv2.nozero_manual_grams, nozero_manual_grams_TBQ_test, type='prob')
+test_results$obs <- nozero_manual_grams_TBQ_test$TBQ
+head(test_results)
+test_results$pred <- predict(rf.cv2.nozero_manual_grams, nozero_manual_grams_TBQ_test)
+multiClassSummary(test_results, lev = levels(test_results$obs))
+mnLogLoss(test_results, lev = levels(test_results$obs))
