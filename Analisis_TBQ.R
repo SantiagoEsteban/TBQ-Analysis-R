@@ -532,6 +532,6 @@ svm.tune3 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
                    data=nozero_manual_grams_3outcomes_train,
                    method = "svmPoly",
                    metric="Accuracy",
-                   tuneLength= 9,
+                   tuneLength= 3,
                    trControl=ctrl,
                    verbose=T)
