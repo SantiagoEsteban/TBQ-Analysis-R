@@ -535,3 +535,6 @@ svm.tune3 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
                    tuneLength= 3,
                    trControl=ctrl,
                    verbose=T)
+
+test_results5 <- predict(svm.tune3, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results5, nozero_manual_grams_3outcomes_test$TBQ)
