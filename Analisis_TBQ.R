@@ -12,8 +12,10 @@ library(RWeka)
 library(caret)
 library(corrplot)
 library(doSNOW)
-cl<-makeCluster(4) #change the 2 to your number of CPU cores
+cl<-makeCluster(2) #change the 4 to your number of CPU cores
 registerDoSNOW(cl)
+#library(doParallel)
+
 ##################
 #Import manual dataset created with REGEX SAS
 ##################
@@ -432,3 +434,104 @@ rf.cv.our_gram_tdm_outcome_3outcomes <- train(data=Four_gram_tdm_outcome_3outcom
 )
 test_results3 <- predict(rf.cv.nozero_manual_grams_3outcomes, nozero_manual_grams_3outcomes_test)
 confusionMatrix(test_results3, nozero_manual_grams_3outcomes_test$TBQ)
+
+########################
+#Boosting tree
+########################
+
+nozero_manual_grams_3outcomes_test
+nozero_manual_grams_3outcomes_train
+
+boostedTree.trctrl.cv.3outcomes <- trainControl(method='cv', 
+                                                number=2, 
+                                                classProbs = T, 
+                                                summaryFunction = multiClassSummary, 
+                                                verboseIter=T)
+
+ntrees <- c(100,200,500,1000)
+interaction_depth <- c(2:9)
+shrink <- c(0.001, 0.01, 0.1)
+tuneGrid.gbm <- expand.grid(n.trees=c(100, 500, 1000),
+                            interaction.depth=c(2:9),
+                            shrinkage=c(0.1),
+                            n.minobsinnode=10)
+system.time(
+boostedTree_3outcomes <- train(data=nozero_manual_grams_3outcomes_train,
+                               TBQ~. -notbqdata -ID_PACIENTE,
+                               distribution='multinomial',
+                               method='gbm',
+                               trControl=boostedTree.trctrl.cv.3outcomes,
+                               tuneGrid=tuneGrid.gbm,
+                               verbose=T)
+)
+
+
+
+system.time(
+boostedTree_3outcomes <- gbm(TBQ~. -notbqdata -ID_PACIENTE,
+                             data=nozero_manual_grams_3outcomes_train,
+                             distribution='multinomial',
+                             n.trees=c(100, 500, 1000),
+                             interaction.depth=c(2:9),
+                             shrinkage=c(0.1),
+                             n.minobsinnode=10,
+                             cv.folds=10,
+                             verbose=T,
+                             n.cores=2)
+
+)
+
+boostedTree_3outcomes_pred <- predict(boostedTree_3outcomes, nozero_manual_grams_3outcomes_test)
+confusionMatrix(boostedTree_3outcomes_pred, nozero_manual_grams_3outcomes_test$TBQ)
+varImp(boostedTree_3outcomes)
+boostedTree_3outcomes_predprob <- predict(boostedTree_3outcomes, nozero_manual_grams_3outcomes_test, type='prob')
+boostedTree_3outcomes_predprob$obs <- nozero_manual_grams_3outcomes_test$TBQ
+head(boostedTree_3outcomes_predprob)
+plot(boostedTree_3outcomes)
+plot(varImp(boostedTree_3outcomes))
+####################
+#SVM
+####################
+
+nozero_manual_grams_3outcomes_test
+nozero_manual_grams_3outcomes_train
+
+ctrl <- trainControl(method="repeatedcv",   # 10fold cross validation
+                     repeats=5,		    # do 5 repititions of cv
+                     summaryFunction=multiClassSummary,	# Use AUC to pick the best model
+                     classProbs=TRUE,verboseIter=T)
+
+svm.tune <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                  data=nozero_manual_grams_3outcomes_train,
+                  method = "svmRadial",
+                  metric="Accuracy",
+                  tuneLength = 9,
+                  trControl=ctrl,
+                  verbose=T)
+
+grid <- expand.grid(sigma = c(seq(0.1,0.5, by=0.05)),
+                    C = c(7.50, 8, 8.5, 9))
+
+svm.tune2 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                  data=nozero_manual_grams_3outcomes_train,
+                  method = "svmRadial",
+                  metric="Accuracy",
+                  tuneGrid = grid,
+                  trControl=ctrl,
+                  verbose=T)
+
+plot(svm.tune2)
+
+test_results4 <- predict(svm.tune2, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results4, nozero_manual_grams_3outcomes_test$TBQ)
+
+grid2 <- expand.grid(scale = c(seq(0.1,0.5, by=0.05)),
+                    C = c(7.50, 8, 8.5, 9))
+
+svm.tune3 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                   data=nozero_manual_grams_3outcomes_train,
+                   method = "svmPoly",
+                   metric="Accuracy",
+                   tuneLength= 9,
+                   trControl=ctrl,
+                   verbose=T)
