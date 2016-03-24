@@ -497,7 +497,7 @@ nozero_manual_grams_3outcomes_test
 nozero_manual_grams_3outcomes_train
 
 ctrl <- trainControl(method="repeatedcv",   # 10fold cross validation
-                     repeats=5,		    # do 5 repititions of cv
+                     repeats=2,		    # do 5 repititions of cv
                      summaryFunction=multiClassSummary,	# Use AUC to pick the best model
                      classProbs=TRUE,verboseIter=T)
 
@@ -509,8 +509,8 @@ svm.tune <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
                   trControl=ctrl,
                   verbose=T)
 
-grid <- expand.grid(sigma = c(seq(0.1,0.5, by=0.05)),
-                    C = c(7.50, 8, 8.5, 9))
+grid <- expand.grid(sigma =0.35,
+                    C =8)
 
 svm.tune2 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
                   data=nozero_manual_grams_3outcomes_train,
@@ -521,12 +521,9 @@ svm.tune2 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
                   verbose=T)
 
 plot(svm.tune2)
-
+#Test set Acc 0.9623
 test_results4 <- predict(svm.tune2, nozero_manual_grams_3outcomes_test)
 confusionMatrix(test_results4, nozero_manual_grams_3outcomes_test$TBQ)
-
-grid2 <- expand.grid(scale = c(seq(0.1,0.5, by=0.05)),
-                    C = c(7.50, 8, 8.5, 9))
 
 svm.tune3 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
                    data=nozero_manual_grams_3outcomes_train,
@@ -538,3 +535,81 @@ svm.tune3 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
 
 test_results5 <- predict(svm.tune3, nozero_manual_grams_3outcomes_test)
 confusionMatrix(test_results5, nozero_manual_grams_3outcomes_test$TBQ)
+
+grid2 <- expand.grid(scale = 0.1,
+                     C = c(5),
+                     degree=c(5:10))
+
+svm.tune4 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                   data=nozero_manual_grams_3outcomes_train,
+                   method = "svmPoly",
+                   metric="Accuracy",
+                   tuneGrid=grid2,
+                   trControl=ctrl,
+                   verbose=T)
+#C=5, Scale=0.1, degree=5; Test set Acc0.9623
+test_results6 <- predict(svm.tune4, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results6, nozero_manual_grams_3outcomes_test$TBQ)
+
+
+svm.tune4
+plot(svm.tune4)
+
+##############
+#Boosted Logistic
+##############
+
+nozero_manual_grams_3outcomes_test
+nozero_manual_grams_3outcomes_train
+
+grid3 <- expand.grid(nIter=c(20, 100, 500))
+
+logboost.tune <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                   data=nozero_manual_grams_3outcomes_train,
+                   method = "LogitBoost",
+                   metric="Accuracy",
+                   tuneGrid=grid3,
+                   trControl=ctrl,
+                   verbose=T)
+
+plot(logboost.tune)
+#TEst Acc 0.9719, nIter 20 
+test_results7 <- predict(logboost.tune, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results7, nozero_manual_grams_3outcomes_test$TBQ)
+
+grid4 <- expand.grid(nIter=c(500))
+
+logboost.tune2 <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                       data=nozero_manual_grams_3outcomes_train,
+                       method = "LogitBoost",
+                       metric="Accuracy",
+                       tuneGrid=grid4,
+                       trControl=ctrl,
+                       verbose=T)
+
+test_results8 <- predict(logboost.tune2, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results8, nozero_manual_grams_3outcomes_test$TBQ)
+
+
+##############
+#Boosting splines
+##############
+
+
+
+#############
+#Neural networks
+#############
+
+grid5 <- expand.grid(size=)
+
+nnet.tune <- train(TBQ~. -notbqdata -ID_PACIENTE -total,
+                        data=nozero_manual_grams_3outcomes_train,
+                        method = "nnet",
+                        metric="Accuracy",
+                        trControl=ctrl,
+                        verbose=T)
+nnet.tune
+plot(nnet.tune)
+test_results9 <- predict(nnet.tune, nozero_manual_grams_3outcomes_test)
+confusionMatrix(test_results9, nozero_manual_grams_3outcomes_test$TBQ)
