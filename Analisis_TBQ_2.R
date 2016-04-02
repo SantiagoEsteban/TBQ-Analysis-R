@@ -98,16 +98,21 @@ morethan5imp.rf <- rf.varimp2_df[which(rf.varimp2_df$'X0' >=5
                                        & rf.varimp2_df$'X1'>=5
                                         & rf.varimp2_df$'X9'>=5),]
 morethan5imp.rf <- as.vector(rownames(morethan5imp.rf))
-morethan5varimp_nozero_manual_grams_train <- nozero_manual_grams_train[,colnames(nozero_manual_grams_train)%in%morethan5imp.rf] 
+morethan5varimp_nozero_manual_grams_train <- nozero_manual_grams_train[,colnames(nozero_manual_grams_train)%in%morethan5imp.rf]
+morethan5varimp_nozero_manual_grams_train <- cbind(TBQ=nozero_manual_grams_train$TBQ, ID_PACIENTE=nozero_manual_grams_train$ID_PACIENTE, morethan5varimp_nozero_manual_grams_train)
 
 #With varimp >5
 
-mtry_grid3 <- expand.grid(mtry=c(sqrt(142), sqrt(142)*3, sqrt(142)*4, sqrt(142)*5))
+mtry_grid3 <- expand.grid(mtry=c(sqrt(47), sqrt(47)*3, sqrt(47)*5, sqrt(47)*6))
 
-rf.nozero_manual_grams3 <- train(data=morethan5varimp_nozero_manual_grams_train,
-                                 TBQ~. -ID_PACIENTE,
+
+rf.trctrl.cv2 <- trainControl(method='cv', number=5, classProbs = T, summaryFunction = multiClassSummary,
+                             allowParallel = F, verboseIter=T)
+
+rf.nozero_manual_grams3 <- train(TBQ~. -ID_PACIENTE, 
+                                 data=morethan5varimp_nozero_manual_grams_train,
                                  method='parRF',
-                                 trControl=rf.trctrl.cv,
+                                 trControl=rf.trctrl.cv2,
                                  tuneGrid=mtry_grid3,
                                  metric='Accuracy',
                                  maximize=T,
@@ -116,5 +121,5 @@ rf.nozero_manual_grams3 <- train(data=morethan5varimp_nozero_manual_grams_train,
                                  verbose=T
 )
 rf.test_results3 <- predict(rf.nozero_manual_grams3, nozero_manual_grams_test)
-confusionMatrix(rf.test_results3 , nozero_manual_grams_test$TBQ)
+confusionMatrix(rf.test_results , nozero_manual_grams_test$TBQ)
 
