@@ -429,6 +429,21 @@ plot(boost.log2)
 boost.log_results2 <- predict(boost.log2, nozero_manual_grams_test)
 confusionMatrix(boost.log_results2, nozero_manual_grams_test$TBQ)
 
+grid.log3 <- expand.grid(nIter=c(545,601,625))
+
+system.time(
+    boost.log3 <- train(TBQ~. -ID_PACIENTE,
+                        data=var.selection_nozero_manual_grams,
+                        method = "LogitBoost",
+                        metric="Accuracy",
+                        tuneGrid=grid.log3,
+                        trControl=ctrl2,
+                        verbose=T)
+)
+plot(boost.log3)
+boost.log_results3 <- predict(boost.log3, nozero_manual_grams_test)
+confusionMatrix(boost.log_results3, nozero_manual_grams_test$TBQ)
+
 #############
 #Neural Network
 #############
@@ -454,29 +469,29 @@ plot(nnet.tune)
 nnet.tune_results <- predict(nnet.tune, nozero_manual_grams_test)
 confusionMatrix(nnet.tune_results, nozero_manual_grams_test$TBQ)
 
-###############
-# Bagged MARS
-###############
-grid6 <- expand.grid(size=)
+#############
+#GAM
+#############
 
-ctrl4 <- trainControl(method="cv",   
+grid5 <- expand.grid(size=)
+
+ctrl3 <- trainControl(method="cv",   
                       repeats=10,		    
                       summaryFunction=multiClassSummary,	
                       classProbs=TRUE,
                       verboseIter=T, 
-                      allowParallel=T)
+                      allowParallel=F)
 
-bagged.MARS <- train(TBQ~. -ID_PACIENTE,
+penalized.log <- train(TBQ~. -ID_PACIENTE,
                    data=var.selection_nozero_manual_grams,
-                   method = "bagEarth",
-                   glm=list(family='multinomial'),
+                   method = "multinom",
                    metric="Accuracy",
-                   tuneLength=1,
-                   trControl=ctrl4)
+                   tuneLength=5,
+                   trControl=ctrl3)
 
-plot(bagged.MARS)
-boost.gam_results <- predict(bagged.MARS, nozero_manual_grams_test)
-confusionMatrix(bagged.MARS_results, nozero_manual_grams_test$TBQ)
+plot(penalized.log)
+penalized.log_results <- predict(penalized.log, nozero_manual_grams_test)
+confusionMatrix(penalized.log_results, nozero_manual_grams_test$TBQ)
 
 ###################
 #Validation
@@ -485,20 +500,65 @@ confusionMatrix(bagged.MARS_results, nozero_manual_grams_test$TBQ)
 #Ensamble of algorithms
 #Escribir el codigo del ensamble para el training set, setear el numero de voto q logran la mejor precision
 ensamble_training <- select(manual_grams, ID_PACIENTE, FECHA, TBQ)
-ensamble_training$RF <- predict(rf.nozero_manual_grams, nozero_manual_grams)
-ensamble_training$GBM <- predict(gbm_1, nozero_manual_grams)
-ensamble_training$SVM <- predict(svm.tune3, nozero_manual_grams)
-ensamble_training$BLR <- predict(boost.log2, nozero_manual_grams)
-ensamble_training$NN <- predict(nnet.tune, nozero_manual_grams)
+ensamble_training$RF <- predict(rf.nozero_manual_grams, nozero_manual_grams) #0.957
+#ensamble_training$GBM <- predict(gbm_1, nozero_manual_grams) #0.9496
+ensamble_training$SVM <- predict(svm.tune3, nozero_manual_grams) #0.959
+#ensamble_training$PLR <- predict(penalized.log, nozero_manual_grams) #0.955
+ensamble_training$NN <- predict(nnet.tune, nozero_manual_grams) #0.958
+t_ensamble_training <- select(ensamble_training, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
+
+Mode <- function(x) {
+    ux <- unique(x)
+    ux[which.max(tabulate(match(x, ux)))]
+}
+
+ensamble_training$final <- as.factor(apply(t_ensamble_training, 2, Mode))
+confusionMatrix(ensamble_training$final, make.names(ensamble_training$TBQ))
+
+View(filter(ensamble_training, TBQ==0 & final=='X1'))
+View(filter(ensamble_training, TBQ==1 & final=='X0'))
 
 
 #Probar con las 6000 marginales de los ptes de 2015 (TBQ - Training - evol marginales - pma0719336_evol_rnd6000_tbq)
+marginal2015 <- as.data.frame(read_excel('TBQ - Training - evol marginales - pma0719336_evol_rnd6000_tbq_var.xlsx'))
+marginal2015 <- filter(marginal2015, ID_PACIENTE!=" ")
+
+ensamble_marginal2015 <- select(marginal2015, ID_PACIENTE, FECHA_CARGA, TBQ)
+ensamble_marginal2015$RF <- predict(rf.nozero_manual_grams, marginal2015) #0.957
+ensamble_marginal2015$SVM <- predict(svm.tune3, marginal2015) #0.959
+ensamble_marginal2015$NN <- predict(nnet.tune, marginal2015) #0.958
+t_ensamble_marginal2015 <- select(ensamble_marginal2015, -ID_PACIENTE, -FECHA_CARGA, -TBQ) %>% t()
+
+Mode <- function(x) {
+    ux <- unique(x)
+    ux[which.max(tabulate(match(x, ux)))]
+}
+
+ensamble_marginal2015$final <- as.factor(apply(t_ensamble_marginal2015, 2, Mode))
+confusionMatrix(ensamble_marginal2015$final, make.names(ensamble_marginal2015$TBQ))
+# ACC 0.991
 
 
 
 #2005
 #Evoluciones + en el alg screening
 
+postscreening2005 <- as.data.frame(read_excel('TBQBOFW_2005_Total_Validado_var'))
+postscreening2005 <- filter(marginal2015, ID_PACIENTE!=" ")
+
+ensamble_marginal2015 <- select(marginal2015, ID_PACIENTE, FECHA_CARGA, TBQ)
+ensamble_marginal2015$RF <- predict(rf.nozero_manual_grams, marginal2015) #0.957
+ensamble_marginal2015$SVM <- predict(svm.tune3, marginal2015) #0.959
+ensamble_marginal2015$NN <- predict(nnet.tune, marginal2015) #0.958
+t_ensamble_marginal2015 <- select(ensamble_marginal2015, -ID_PACIENTE, -FECHA_CARGA, -TBQ) %>% t()
+
+Mode <- function(x) {
+    ux <- unique(x)
+    ux[which.max(tabulate(match(x, ux)))]
+}
+
+ensamble_marginal2015$final <- as.factor(apply(t_ensamble_marginal2015, 2, Mode))
+confusionMatrix(ensamble_marginal2015$final, make.names(ensamble_marginal2015$TBQ))
 
 #2015-2016
 #Evoluciones marginales
