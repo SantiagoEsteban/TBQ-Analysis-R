@@ -607,5 +607,6 @@ ensamble_postscreening2016$final <- as.factor(apply(t_ensamble_postscreening2016
 confusionMatrix(ensamble_postscreening2016$final, make.names(ensamble_postscreening2016$TBQ))
 #ACC 0.917
 #REVALIDAR ESTOS PACIENTES, TENDO DUDAS Q ESTEN TODOS MAL
+#INTENTAR GRAFICO DE LONGITUDINAL, x=occasion, y=TBQ_outcome, grosor de la linea (porcentaje de ptes siguiendo esa trayectoria (habria que agruparlos por trayectorias))
 
 #Algoritmo para los missing...
