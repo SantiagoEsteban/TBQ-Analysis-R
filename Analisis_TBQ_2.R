@@ -543,23 +543,68 @@ confusionMatrix(ensamble_marginal2015$final, make.names(ensamble_marginal2015$TB
 #2005
 #Evoluciones + en el alg screening
 
-postscreening2005 <- as.data.frame(read_excel('TBQBOFW_2005_Total_Validado_var'))
-postscreening2005 <- filter(marginal2015, ID_PACIENTE!=" ")
+postscreening2005 <- as.data.frame(read_excel('TBQBOFW_2005_Total_Validado_var.xlsx'))
+postscreening2005 <- filter(postscreening2005, ID_PACIENTE!=" ")
 
-ensamble_marginal2015 <- select(marginal2015, ID_PACIENTE, FECHA_CARGA, TBQ)
-ensamble_marginal2015$RF <- predict(rf.nozero_manual_grams, marginal2015) #0.957
-ensamble_marginal2015$SVM <- predict(svm.tune3, marginal2015) #0.959
-ensamble_marginal2015$NN <- predict(nnet.tune, marginal2015) #0.958
-t_ensamble_marginal2015 <- select(ensamble_marginal2015, -ID_PACIENTE, -FECHA_CARGA, -TBQ) %>% t()
+
+ensamble_postscreening2005 <- select(postscreening2005, ID_PACIENTE, FECHA, TBQ)
+ensamble_postscreening2005$RF <- predict(rf.nozero_manual_grams, postscreening2005) 
+ensamble_postscreening2005$SVM <- predict(svm.tune3, postscreening2005) 
+ensamble_postscreening2005$NN <- predict(nnet.tune, postscreening2005) 
+t_ensamble_postscreening2005 <- select(ensamble_postscreening2005, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
+
+ensamble_postscreening2005$final <- as.factor(apply(t_ensamble_postscreening2005, 2, Mode))
+confusionMatrix(ensamble_postscreening2005$final, make.names(ensamble_postscreening2005$TBQ))
+#ACC 0.9552
+
+#Wide results by occasion(t)
+ensamble_postscreening2005_t <- filter(ensamble_postscreening2005, FECHA >= 1/1/2000) %>% 
+    unique() %>% group_by(ID_PACIENTE) %>% mutate(t=rank(FECHA, ties.method='random'))
+ensamble_postscreening2005_wide <- select(ensamble_postscreening2005_t, ID_PACIENTE, final,t) %>% 
+    spread(t, final)
+
+#Wide results by year
+library(lubridate)
+ensamble_postscreening2005_year <- ensamble_postscreening2005 %>% filter(FECHA >= '2000/1/1' & final!='X9') %>%
+    group_by(ID_PACIENTE) %>% mutate(t=rank(FECHA, ties.method='random'))
+ensamble_postscreening2005_year$FECHA <- floor_date(ensamble_postscreening2005_year$FECHA, unit='year')
+ensamble_postscreening2005_year <- group_by(ensamble_postscreening2005_year, ID_PACIENTE) %>% filter(t==max(t))
+ensamble_postscreening2005_year <- select(ensamble_postscreening2005_year, ID_PACIENTE, final,FECHA) %>% 
+    spread(FECHA, final)
+
+#2015-2016
+#Evoluciones marginales
+marginal2016 <- as.data.frame(read_excel('pma0719336_evol_rnd6000_tst_tbq_var1.xlsx'))
+marginal2016 <- filter(marginal2016, ID_PACIENTE!=" ")
+
+ensamble_marginal2016 <- select(marginal2016, ID_PACIENTE, FECHA_CARGA, TBQ)
+ensamble_marginal2016$RF <- predict(rf.nozero_manual_grams, marginal2016)
+ensamble_marginal2016$SVM <- predict(svm.tune3, marginal2016) 
+ensamble_marginal2016$NN <- predict(nnet.tune, marginal2016)
+t_ensamble_marginal2016 <- select(ensamble_marginal2016, -ID_PACIENTE, -FECHA_CARGA, -TBQ) %>% t()
 
 Mode <- function(x) {
     ux <- unique(x)
     ux[which.max(tabulate(match(x, ux)))]
 }
 
-ensamble_marginal2015$final <- as.factor(apply(t_ensamble_marginal2015, 2, Mode))
-confusionMatrix(ensamble_marginal2015$final, make.names(ensamble_marginal2015$TBQ))
+ensamble_marginal2016$final <- as.factor(apply(t_ensamble_marginal2016, 2, Mode))
+confusionMatrix(ensamble_marginal2016$final, make.names(ensamble_marginal2016$TBQ))
 
-#2015-2016
-#Evoluciones marginales
 #Evoluciones + en el alg screening (Pasarlas por el alg de screening y tmb probar directo el ensamble)
+postscreening2016 <- as.data.frame(read_excel('FiltradoSolo2015_2016_pma0719336_evol_full_tst_tbq_var.xlsx'))
+postscreening2016 <- filter(postscreening2016, ID_PACIENTE!=" ")
+
+
+ensamble_postscreening2016 <- select(postscreening2016, ID_PACIENTE, FECHA, TBQ)
+ensamble_postscreening2016$RF <- predict(rf.nozero_manual_grams, postscreening2016) 
+ensamble_postscreening2016$SVM <- predict(svm.tune3, postscreening2016) 
+ensamble_postscreening2016$NN <- predict(nnet.tune, postscreening2016) 
+t_ensamble_postscreening2016 <- select(ensamble_postscreening2016, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
+
+ensamble_postscreening2016$final <- as.factor(apply(t_ensamble_postscreening2016, 2, Mode))
+confusionMatrix(ensamble_postscreening2016$final, make.names(ensamble_postscreening2016$TBQ))
+confusionMatrix(ensamble_postscreening2016$SVM, make.names(ensamble_postscreening2016$TBQ))
+
+
+#Algoritmo para los missing...
