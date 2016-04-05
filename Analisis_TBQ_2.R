@@ -599,12 +599,13 @@ postscreening2016 <- filter(postscreening2016, ID_PACIENTE!=" ")
 ensamble_postscreening2016 <- select(postscreening2016, ID_PACIENTE, FECHA, TBQ)
 ensamble_postscreening2016$RF <- predict(rf.nozero_manual_grams, postscreening2016) 
 ensamble_postscreening2016$SVM <- predict(svm.tune3, postscreening2016) 
-ensamble_postscreening2016$NN <- predict(nnet.tune, postscreening2016) 
+ensamble_postscreening2016$NN <- predict(nnet.tune, postscreening2016)
+
 t_ensamble_postscreening2016 <- select(ensamble_postscreening2016, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
 
 ensamble_postscreening2016$final <- as.factor(apply(t_ensamble_postscreening2016, 2, Mode))
 confusionMatrix(ensamble_postscreening2016$final, make.names(ensamble_postscreening2016$TBQ))
-confusionMatrix(ensamble_postscreening2016$SVM, make.names(ensamble_postscreening2016$TBQ))
-
+#ACC 0.917
+#REVALIDAR ESTOS PACIENTES, TENDO DUDAS Q ESTEN TODOS MAL
 
 #Algoritmo para los missing...
