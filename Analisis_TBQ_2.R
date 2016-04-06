@@ -389,61 +389,6 @@ plot(svm.tune3)
 svm.tune3.test_results <- predict(svm.tune3, nozero_manual_grams_test)
 confusionMatrix(svm.tune3.test_results, nozero_manual_grams_test$TBQ)
 
-#################
-#Boosted logistic
-#################
-
-grid.log <- expand.grid(nIter=c(100,200,300,400,500))
-
-ctrl2 <- trainControl(method="cv",   
-                     repeats=10,		    
-                     summaryFunction=multiClassSummary,	
-                     classProbs=TRUE,
-                     verboseIter=T, 
-                     allowParallel=T)
-system.time(
-boost.log <- train(TBQ~. -ID_PACIENTE,
-                        data=var.selection_nozero_manual_grams,
-                        method = "LogitBoost",
-                        metric="Accuracy",
-                        tuneGrid=grid.log,
-                        trControl=ctrl2,
-                        verbose=T)
-)
-plot(boost.log)
-boost.log_results <- predict(boost.log, nozero_manual_grams_test)
-confusionMatrix(boost.log_results, nozero_manual_grams_test$TBQ)
-
-grid.log2 <- expand.grid(nIter=c(500, 600, 700))
-
-system.time(
-    boost.log2 <- train(TBQ~. -ID_PACIENTE,
-                       data=var.selection_nozero_manual_grams,
-                       method = "LogitBoost",
-                       metric="Accuracy",
-                       tuneGrid=grid.log2,
-                       trControl=ctrl2,
-                       verbose=T)
-)
-plot(boost.log2)
-boost.log_results2 <- predict(boost.log2, nozero_manual_grams_test)
-confusionMatrix(boost.log_results2, nozero_manual_grams_test$TBQ)
-
-grid.log3 <- expand.grid(nIter=c(545,601,625))
-
-system.time(
-    boost.log3 <- train(TBQ~. -ID_PACIENTE,
-                        data=var.selection_nozero_manual_grams,
-                        method = "LogitBoost",
-                        metric="Accuracy",
-                        tuneGrid=grid.log3,
-                        trControl=ctrl2,
-                        verbose=T)
-)
-plot(boost.log3)
-boost.log_results3 <- predict(boost.log3, nozero_manual_grams_test)
-confusionMatrix(boost.log_results3, nozero_manual_grams_test$TBQ)
-
 #############
 #Neural Network
 #############
@@ -469,29 +414,19 @@ plot(nnet.tune)
 nnet.tune_results <- predict(nnet.tune, nozero_manual_grams_test)
 confusionMatrix(nnet.tune_results, nozero_manual_grams_test$TBQ)
 
-#############
-#GAM
-#############
-
-grid5 <- expand.grid(size=)
-
-ctrl3 <- trainControl(method="cv",   
-                      repeats=10,		    
-                      summaryFunction=multiClassSummary,	
-                      classProbs=TRUE,
-                      verboseIter=T, 
-                      allowParallel=F)
-
-penalized.log <- train(TBQ~. -ID_PACIENTE,
-                   data=var.selection_nozero_manual_grams,
-                   method = "multinom",
-                   metric="Accuracy",
-                   tuneLength=5,
-                   trControl=ctrl3)
-
-plot(penalized.log)
-penalized.log_results <- predict(penalized.log, nozero_manual_grams_test)
-confusionMatrix(penalized.log_results, nozero_manual_grams_test$TBQ)
+###################
+#KNN
+###################
+ctrl.knn <- trainControl(method="cv",
+                         classProbs=TRUE,
+                         summaryFunction = multiClassSummary,
+                         verboseIter=T)
+knn <- train(TBQ~. -ID_PACIENTE, 
+             data=var.selection_nozero_manual_grams,
+             method = "knn", 
+             trControl = ctrl.knn, preProcess = c("center","scale"), 
+             tuneLength = 20,
+             use.all=F)
 
 ###################
 #Validation
@@ -501,22 +436,56 @@ confusionMatrix(penalized.log_results, nozero_manual_grams_test$TBQ)
 #Escribir el codigo del ensamble para el training set, setear el numero de voto q logran la mejor precision
 ensamble_training <- select(manual_grams, ID_PACIENTE, FECHA, TBQ)
 ensamble_training$RF <- predict(rf.nozero_manual_grams, nozero_manual_grams) #0.957
-#ensamble_training$GBM <- predict(gbm_1, nozero_manual_grams) #0.9496
+ensamble_training$GBM <- predict(gbm_1, nozero_manual_grams) #0.9496
 ensamble_training$SVM <- predict(svm.tune3, nozero_manual_grams) #0.959
-#ensamble_training$PLR <- predict(penalized.log, nozero_manual_grams) #0.955
+ensamble_training$PLR <- predict(penalized.log, nozero_manual_grams) #0.955
 ensamble_training$NN <- predict(nnet.tune, nozero_manual_grams) #0.958
-t_ensamble_training <- select(ensamble_training, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
+ensamble_training$TBQ <- make.names(ensamble_training$TBQ)
+#t_ensamble_training <- select(ensamble_training, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
 
-Mode <- function(x) {
-    ux <- unique(x)
-    ux[which.max(tabulate(match(x, ux)))]
-}
+#########
+#SVM
+#########
+ctrl <- trainControl(method="cv",   
+                     repeats=10,		    
+                     summaryFunction=multiClassSummary,	# Use AUC to pick the best model
+                     classProbs=TRUE,
+                     verboseIter=T, 
+                     allowParallel=F)
 
-ensamble_training$final <- as.factor(apply(t_ensamble_training, 2, Mode))
-confusionMatrix(ensamble_training$final, make.names(ensamble_training$TBQ))
+system.time(
+    svm.blended <- train(data=ensamble_training,
+                       TBQ~. -ID_PACIENTE -FECHA,
+                       method = "svmRadial",
+                       metric="Accuracy",
+                       tuneLength = 9,
+                       trControl=ctrl,
+                       verbose=T)
+)
 
-View(filter(ensamble_training, TBQ==0 & final=='X1'))
-View(filter(ensamble_training, TBQ==1 & final=='X0'))
+system.time(
+    svm.blended.poly <- train(data=ensamble_training,
+                         TBQ~. -ID_PACIENTE -FECHA,
+                         method = "svmPoly",
+                         metric="Accuracy",
+                         tuneLength = 5,
+                         trControl=ctrl,
+                         verbose=T)
+)
+
+
+####TRY PCA
+#Use screeplot to decide #of prcomp
+#Use algorithms with PCA
+PCA <- preProcess(select(nozero_manual_grams, -ID_PACIENTE, -TBQ), method = c("pca"))
+plot(PCA)
+nozero_manual_grams_pca <- predict(PCA, nozero_manual_grams)
+plot(princomp(select(nozero_manual_grams, -ID_PACIENTE, -TBQ)), 
+          type = 'lines', npcs=60, 
+     main="Scree Plot for Principal Components vs Variance Explained")
+abline(h=0, col="red")
+
+
 
 
 #Probar con las 6000 marginales de los ptes de 2015 (TBQ - Training - evol marginales - pma0719336_evol_rnd6000_tbq)
@@ -565,13 +534,26 @@ ensamble_postscreening2005_wide <- select(ensamble_postscreening2005_t, ID_PACIE
 
 #Wide results by year
 library(lubridate)
+#By year table
 ensamble_postscreening2005_year <- ensamble_postscreening2005 %>% filter(FECHA >= '2000/1/1' & final!='X9') %>%
     group_by(ID_PACIENTE) %>% mutate(t=rank(FECHA, ties.method='random'))
 ensamble_postscreening2005_year$FECHA <- floor_date(ensamble_postscreening2005_year$FECHA, unit='year')
-ensamble_postscreening2005_year <- group_by(ensamble_postscreening2005_year, ID_PACIENTE) %>% filter(t==max(t))
+ensamble_postscreening2005_year <- group_by(ensamble_postscreening2005_year, ID_PACIENTE, FECHA) %>% filter(t==max(t))
 ensamble_postscreening2005_year <- select(ensamble_postscreening2005_year, ID_PACIENTE, final,FECHA) %>% 
     spread(FECHA, final)
 
+#Graphing trajectories
+IDs <- c(66714, 32969, 62638, 63491, 66714, 203943, 78737)
+
+ggplot(filter(ensamble_postscreening2005, ID_PACIENTE%in%IDs & final!='X9'), aes(x=FECHA, y=final, group=as.factor(ID_PACIENTE), color=as.factor(ID_PACIENTE))) + 
+    geom_point() + 
+    geom_path(size=1) + 
+    guides(color=FALSE) + 
+    theme_gray() + 
+    facet_wrap(~ID_PACIENTE, scale='free') +
+    ggtitle('Smoking status vs Time') +
+    xlab('Time') + ylab('Smoking Status')
+    
 #2015-2016
 #Evoluciones marginales
 marginal2016 <- as.data.frame(read_excel('pma0719336_evol_rnd6000_tst_tbq_var1.xlsx'))
@@ -590,6 +572,7 @@ Mode <- function(x) {
 
 ensamble_marginal2016$final <- as.factor(apply(t_ensamble_marginal2016, 2, Mode))
 confusionMatrix(ensamble_marginal2016$final, make.names(ensamble_marginal2016$TBQ))
+#Acc 0.99
 
 #Evoluciones + en el alg screening (Pasarlas por el alg de screening y tmb probar directo el ensamble)
 postscreening2016 <- as.data.frame(read_excel('FiltradoSolo2015_2016_pma0719336_evol_full_tst_tbq_var.xlsx'))
@@ -605,8 +588,94 @@ t_ensamble_postscreening2016 <- select(ensamble_postscreening2016, -ID_PACIENTE,
 
 ensamble_postscreening2016$final <- as.factor(apply(t_ensamble_postscreening2016, 2, Mode))
 confusionMatrix(ensamble_postscreening2016$final, make.names(ensamble_postscreening2016$TBQ))
-#ACC 0.917
-#REVALIDAR ESTOS PACIENTES, TENDO DUDAS Q ESTEN TODOS MAL
-#INTENTAR GRAFICO DE LONGITUDINAL, x=occasion, y=TBQ_outcome, grosor de la linea (porcentaje de ptes siguiendo esa trayectoria (habria que agruparlos por trayectorias))
+#ACC 0.9022
+#REver con la base q pase manu miercoles, que tenga bien los dx
 
-#Algoritmo para los missing...
+
+#PROBAR PRCOMP
+#PROBAR BLENDING, osea usar otro algoritmo para predecir a aprtir de todas los votos de cada algoritmo
+
+
+
+
+
+
+#Algoritmo para los missing
+#BASE DE PTES MISSING.
+##############
+missing <- read_excel('notbqdata2015completo.xlsx')
+missing <- filter(missing, ID_PACIENTE!=" ")
+
+missing2 <- tbl_df(read_excel('PMA0719336_cv.xlsx')) %>% select(ID_PACIENTE, antec_cv) %>% full_join(missing, by='ID_PACIENTE')
+missing2 <- missing2[!duplicated(missing2),]
+missing3 <- tbl_df(read_excel('PMA0719336_cerebv.xlsx')) %>% select(ID_PACIENTE, antec_cerebro) %>% full_join(missing2, by='ID_PACIENTE')
+missing3 <- missing3[!duplicated(missing3),]
+
+#Analyzing frequencies
+freq_missing3 <- colSums(missing3, na.rm = T)
+nozero_freq_missing3 <- freq_missing3 > 0 #No 0 columns
+nzvarmissing <- nearZeroVar(missing3)
+missing4 <- select(missing3, -nzvarmissing)
+
+#Analyzing correlation
+missing4_cor <- cor(select(missing4, -ID_PACIENTE, -tbqact2015, -antecedentetotal, -totalevolprimera, -totalevoluciones, -sumantecedentetotal, -total_int))
+library(corrplot)
+corrplot(missing4_cor, order = "hclust", tl.cex=0.6)
+#Finding highly correlated variables
+highCorr <- findCorrelation(missing4_cor, cutoff = .75) #Solo MED_EVOL_PREQX y PREQX
+missing3$tbqact2015 <- make.names(missing3$tbqact2015)
+
+
+############
+#Boosted trees
+############
+tuneGrid.gbm5 <- expand.grid(n.trees=c(400,500,600,700),
+                             interaction.depth=c(3:7),
+                             shrinkage=c(0.1, 001, 0.0001),
+                             n.minobsinnode=c(10))
+
+boostedTree.trctrl3 <- trainControl(method='cv', 
+                                    number=10, 
+                                    classProbs = T, 
+                                    summaryFunction = twoClassSummary, 
+                                    verboseIter=T,
+                                    allowParallel=F)
+
+system.time(
+    gbm_missing <- train(data=filter(missing3, tbqact2015!='NA.'),
+                   tbqact2015~. -ID_PACIENTE,
+                   distribution='bernoulli',
+                   method='gbm',
+                   metric='ROC',
+                   trControl=boostedTree.trctrl3,
+                   tuneGrid=tuneGrid.gbm5,
+                   verbose=T)
+)
+
+plot(gbm_missing)
+varImp(gbm_missing)
+#gbm_missing.test_results <- predict(gbm_missing, nozero_manual_grams_test)
+#confusionMatrix(gbm_missing.test_results, nozero_manual_grams_test$TBQ)
+
+###
+#SVM
+####
+
+ctrl <- trainControl(method="cv",   
+                     repeats=10,		    
+                     summaryFunction=multiClassSummary,	
+                     classProbs=TRUE,
+                     verboseIter=T, 
+                     allowParallel=F)
+system.time(
+    svm.tune <- train(data=filter(missing3, tbqact2015!='NA.'),
+                      tbqact2015~. -ID_PACIENTE,
+                      method = "svmRadial",
+                      metric="Accuracy",
+                      tuneLength = 9,
+                      trControl=ctrl,
+                      verbose=T)
+)
+
+grid <- expand.grid(sigma =seq(0.0001,0.01, by=0.002),
+                    C =c(1,2,3))
