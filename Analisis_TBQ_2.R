@@ -414,19 +414,6 @@ plot(nnet.tune)
 nnet.tune_results <- predict(nnet.tune, nozero_manual_grams_test)
 confusionMatrix(nnet.tune_results, nozero_manual_grams_test$TBQ)
 
-###################
-#KNN
-###################
-ctrl.knn <- trainControl(method="cv",
-                         classProbs=TRUE,
-                         summaryFunction = multiClassSummary,
-                         verboseIter=T)
-knn <- train(TBQ~. -ID_PACIENTE, 
-             data=var.selection_nozero_manual_grams,
-             method = "knn", 
-             trControl = ctrl.knn, preProcess = c("center","scale"), 
-             tuneLength = 20,
-             use.all=F)
 
 ###################
 #Validation
@@ -436,9 +423,9 @@ knn <- train(TBQ~. -ID_PACIENTE,
 #Escribir el codigo del ensamble para el training set, setear el numero de voto q logran la mejor precision
 ensamble_training <- select(manual_grams, ID_PACIENTE, FECHA, TBQ)
 ensamble_training$RF <- predict(rf.nozero_manual_grams, nozero_manual_grams) #0.957
-ensamble_training$GBM <- predict(gbm_1, nozero_manual_grams) #0.9496
+#ensamble_training$GBM <- predict(gbm_1, nozero_manual_grams) #0.9496
 ensamble_training$SVM <- predict(svm.tune3, nozero_manual_grams) #0.959
-ensamble_training$PLR <- predict(penalized.log, nozero_manual_grams) #0.955
+#ensamble_training$PLR <- predict(penalized.log, nozero_manual_grams) #0.955
 ensamble_training$NN <- predict(nnet.tune, nozero_manual_grams) #0.958
 ensamble_training$TBQ <- make.names(ensamble_training$TBQ)
 #t_ensamble_training <- select(ensamble_training, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
@@ -447,31 +434,26 @@ ensamble_training$TBQ <- make.names(ensamble_training$TBQ)
 #SVM
 #########
 ctrl <- trainControl(method="cv",   
-                     repeats=10,		    
+                     repeats=5,		    
                      summaryFunction=multiClassSummary,	# Use AUC to pick the best model
                      classProbs=TRUE,
                      verboseIter=T, 
                      allowParallel=F)
 
-system.time(
-    svm.blended <- train(data=ensamble_training,
-                       TBQ~. -ID_PACIENTE -FECHA,
-                       method = "svmRadial",
-                       metric="Accuracy",
-                       tuneLength = 9,
-                       trControl=ctrl,
-                       verbose=T)
-)
+grid.blended.linear <- expand.grid(C=c(0.001, 0.01, 0.02, 0.03))
 
 system.time(
-    svm.blended.poly <- train(data=ensamble_training,
-                         TBQ~. -ID_PACIENTE -FECHA,
-                         method = "svmPoly",
+    svm.blended.linear <- train(data=select(ensamble_training, -ID_PACIENTE, -FECHA),
+                         TBQ~.,
+                         method = "svmLinear",
                          metric="Accuracy",
-                         tuneLength = 5,
+                         tuneGrid = grid.blended.linear,
                          trControl=ctrl,
                          verbose=T)
 )
+#Acc0.966, C=0.03
+ensamble_training$Final <- predict(svm.blended.linear, ensamble_training)
+
 
 
 ####TRY PCA
@@ -481,11 +463,9 @@ PCA <- preProcess(select(nozero_manual_grams, -ID_PACIENTE, -TBQ), method = c("p
 plot(PCA)
 nozero_manual_grams_pca <- predict(PCA, nozero_manual_grams)
 plot(princomp(select(nozero_manual_grams, -ID_PACIENTE, -TBQ)), 
-          type = 'lines', npcs=60, 
+          type = 'lines', npcs=70, 
      main="Scree Plot for Principal Components vs Variance Explained")
 abline(h=0, col="red")
-
-
 
 
 #Probar con las 6000 marginales de los ptes de 2015 (TBQ - Training - evol marginales - pma0719336_evol_rnd6000_tbq)
@@ -493,19 +473,13 @@ marginal2015 <- as.data.frame(read_excel('TBQ - Training - evol marginales - pma
 marginal2015 <- filter(marginal2015, ID_PACIENTE!=" ")
 
 ensamble_marginal2015 <- select(marginal2015, ID_PACIENTE, FECHA_CARGA, TBQ)
-ensamble_marginal2015$RF <- predict(rf.nozero_manual_grams, marginal2015) #0.957
-ensamble_marginal2015$SVM <- predict(svm.tune3, marginal2015) #0.959
-ensamble_marginal2015$NN <- predict(nnet.tune, marginal2015) #0.958
-t_ensamble_marginal2015 <- select(ensamble_marginal2015, -ID_PACIENTE, -FECHA_CARGA, -TBQ) %>% t()
-
-Mode <- function(x) {
-    ux <- unique(x)
-    ux[which.max(tabulate(match(x, ux)))]
-}
-
-ensamble_marginal2015$final <- as.factor(apply(t_ensamble_marginal2015, 2, Mode))
-confusionMatrix(ensamble_marginal2015$final, make.names(ensamble_marginal2015$TBQ))
-# ACC 0.991
+ensamble_marginal2015$RF <- predict(rf.nozero_manual_grams, marginal2015)
+ensamble_marginal2015$SVM <- predict(svm.tune3, marginal2015) 
+#ensamble_marginal2015$PLR <- predict(penalized.log, marginal2015)
+ensamble_marginal2015$NN <- predict(nnet.tune, marginal2015)
+ensamble_marginal2015$Final <- predict(svm.blended.linear, ensamble_marginal2015)
+confusionMatrix(ensamble_marginal2015$Final, make.names(ensamble_marginal2015$TBQ))
+# ACC 0.9917
 
 
 
@@ -519,12 +493,11 @@ postscreening2005 <- filter(postscreening2005, ID_PACIENTE!=" ")
 ensamble_postscreening2005 <- select(postscreening2005, ID_PACIENTE, FECHA, TBQ)
 ensamble_postscreening2005$RF <- predict(rf.nozero_manual_grams, postscreening2005) 
 ensamble_postscreening2005$SVM <- predict(svm.tune3, postscreening2005) 
-ensamble_postscreening2005$NN <- predict(nnet.tune, postscreening2005) 
-t_ensamble_postscreening2005 <- select(ensamble_postscreening2005, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
+ensamble_postscreening2005$NN <- predict(nnet.tune, postscreening2005)
+ensamble_postscreening2005$Final <- predict(svm.blended.linear, ensamble_postscreening2005)
+confusionMatrix(ensamble_postscreening2005$Final, make.names(ensamble_postscreening2005$TBQ))
 
-ensamble_postscreening2005$final <- as.factor(apply(t_ensamble_postscreening2005, 2, Mode))
-confusionMatrix(ensamble_postscreening2005$final, make.names(ensamble_postscreening2005$TBQ))
-#ACC 0.9552
+#ACC 0.9532
 
 #Wide results by occasion(t)
 ensamble_postscreening2005_t <- filter(ensamble_postscreening2005, FECHA >= 1/1/2000) %>% 
@@ -539,13 +512,13 @@ ensamble_postscreening2005_year <- ensamble_postscreening2005 %>% filter(FECHA >
     group_by(ID_PACIENTE) %>% mutate(t=rank(FECHA, ties.method='random'))
 ensamble_postscreening2005_year$FECHA <- floor_date(ensamble_postscreening2005_year$FECHA, unit='year')
 ensamble_postscreening2005_year <- group_by(ensamble_postscreening2005_year, ID_PACIENTE, FECHA) %>% filter(t==max(t))
-ensamble_postscreening2005_year <- select(ensamble_postscreening2005_year, ID_PACIENTE, final,FECHA) %>% 
-    spread(FECHA, final)
+ensamble_postscreening2005_year <- select(ensamble_postscreening2005_year, ID_PACIENTE, Final,FECHA) %>% 
+    spread(FECHA, Final)
 
 #Graphing trajectories
 IDs <- c(66714, 32969, 62638, 63491, 66714, 203943, 78737)
 
-ggplot(filter(ensamble_postscreening2005, ID_PACIENTE%in%IDs & final!='X9'), aes(x=FECHA, y=final, group=as.factor(ID_PACIENTE), color=as.factor(ID_PACIENTE))) + 
+ggplot(filter(ensamble_postscreening2005, ID_PACIENTE%in%IDs & Final!='X9'), aes(x=FECHA, y=Final, group=as.factor(ID_PACIENTE), color=as.factor(ID_PACIENTE))) + 
     geom_point() + 
     geom_path(size=1) + 
     guides(color=FALSE) + 
@@ -563,19 +536,14 @@ ensamble_marginal2016 <- select(marginal2016, ID_PACIENTE, FECHA_CARGA, TBQ)
 ensamble_marginal2016$RF <- predict(rf.nozero_manual_grams, marginal2016)
 ensamble_marginal2016$SVM <- predict(svm.tune3, marginal2016) 
 ensamble_marginal2016$NN <- predict(nnet.tune, marginal2016)
-t_ensamble_marginal2016 <- select(ensamble_marginal2016, -ID_PACIENTE, -FECHA_CARGA, -TBQ) %>% t()
+ensamble_marginal2016$Final <- predict(svm.blended.linear, ensamble_marginal2016)
+confusionMatrix(ensamble_marginal2016$Final, make.names(ensamble_marginal2016$TBQ))
 
-Mode <- function(x) {
-    ux <- unique(x)
-    ux[which.max(tabulate(match(x, ux)))]
-}
 
-ensamble_marginal2016$final <- as.factor(apply(t_ensamble_marginal2016, 2, Mode))
-confusionMatrix(ensamble_marginal2016$final, make.names(ensamble_marginal2016$TBQ))
-#Acc 0.99
+#Acc 0.9908
 
 #Evoluciones + en el alg screening (Pasarlas por el alg de screening y tmb probar directo el ensamble)
-postscreening2016 <- as.data.frame(read_excel('FiltradoSolo2015_2016_pma0719336_evol_full_tst_tbq_var.xlsx'))
+postscreening2016 <- as.data.frame(read_excel('Filtrado_2015_2016_pma0719336_evol_full_tst_tbq_problemas_var.xlsx'))
 postscreening2016 <- filter(postscreening2016, ID_PACIENTE!=" ")
 
 
@@ -583,21 +551,9 @@ ensamble_postscreening2016 <- select(postscreening2016, ID_PACIENTE, FECHA, TBQ)
 ensamble_postscreening2016$RF <- predict(rf.nozero_manual_grams, postscreening2016) 
 ensamble_postscreening2016$SVM <- predict(svm.tune3, postscreening2016) 
 ensamble_postscreening2016$NN <- predict(nnet.tune, postscreening2016)
-
-t_ensamble_postscreening2016 <- select(ensamble_postscreening2016, -ID_PACIENTE, -FECHA, -TBQ) %>% t()
-
-ensamble_postscreening2016$final <- as.factor(apply(t_ensamble_postscreening2016, 2, Mode))
-confusionMatrix(ensamble_postscreening2016$final, make.names(ensamble_postscreening2016$TBQ))
-#ACC 0.9022
-#REver con la base q pase manu miercoles, que tenga bien los dx
-
-
-#PROBAR PRCOMP
-#PROBAR BLENDING, osea usar otro algoritmo para predecir a aprtir de todas los votos de cada algoritmo
-
-
-
-
+ensamble_postscreening2016$Final <- predict(svm.blended.linear, ensamble_postscreening2016)
+confusionMatrix(ensamble_postscreening2016$Final, make.names(ensamble_postscreening2016$TBQ))
+#ACC 0.9266
 
 
 #Algoritmo para los missing
@@ -605,57 +561,90 @@ confusionMatrix(ensamble_postscreening2016$final, make.names(ensamble_postscreen
 ##############
 missing <- read_excel('notbqdata2015completo.xlsx')
 missing <- filter(missing, ID_PACIENTE!=" ")
-
+algunavez <- read_excel('llamadosnodatatbq.xlsx')
+algunavez <- filter(algunavez, ID_PACIENTE!=" ") %>% select(ID_PACIENTE, fumoalgunavez)
 missing2 <- tbl_df(read_excel('PMA0719336_cv.xlsx')) %>% select(ID_PACIENTE, antec_cv) %>% full_join(missing, by='ID_PACIENTE')
 missing2 <- missing2[!duplicated(missing2),]
 missing3 <- tbl_df(read_excel('PMA0719336_cerebv.xlsx')) %>% select(ID_PACIENTE, antec_cerebro) %>% full_join(missing2, by='ID_PACIENTE')
 missing3 <- missing3[!duplicated(missing3),]
+only_eversmokers <- ensamble_training %>% filter(TBQ!='X9') %>% filter(TBQ!='X0') %>% select(ID_PACIENTE, TBQ) %>% unique()
+colnames(only_eversmokers) <- c('ID_PACIENTE', 'fumoalgunavez')
+only_eversmokers$fumoalgunavez <- 1
+algunavez2 <- full_join(algunavez, only_eversmokers, by='ID_PACIENTE')
+algunavez3 <- algunavez2 %>% unite(fumoalgunavez, c(fumoalgunavez.x, fumoalgunavez.y))
+algunavez3$fumoalgunavez <- gsub('_NA', x=algunavez3$fumoalgunavez, ' ')
+algunavez3$fumoalgunavez <- gsub('NA_', x=algunavez3$fumoalgunavez, ' ')
+algunavez3$fumoalgunavez <- gsub('0_', x=algunavez3$fumoalgunavez, ' ')
+algunavez3$fumoalgunavez <- gsub('1_', x=algunavez3$fumoalgunavez, ' ')
+algunavez3$fumoalgunavez <- as.numeric(algunavez3$fumoalgunavez)
+algunavez3$fumoalgunavez <- make.names(algunavez3$fumoalgunavez)
+missing3 <- full_join(missing3, algunavez3, by='ID_PACIENTE')
+missing3$fumoalgunavez[is.na(missing3$fumoalgunavez)] <- 'X0'
+missing3 <- make.names(missing3$tbqact2015)
 
 #Analyzing frequencies
 freq_missing3 <- colSums(missing3, na.rm = T)
-nozero_freq_missing3 <- freq_missing3 > 0 #No 0 columns
-nzvarmissing <- nearZeroVar(missing3)
-missing4 <- select(missing3, -nzvarmissing)
+sum(freq_missing3 > 0) #No 0 columns
+
+#ZeroVar
+#nzvarmissing <- nearZeroVar(missing3)
+#missing4 <- select(missing3, -nzvarmissing)
 
 #Analyzing correlation
-missing4_cor <- cor(select(missing4, -ID_PACIENTE, -tbqact2015, -antecedentetotal, -totalevolprimera, -totalevoluciones, -sumantecedentetotal, -total_int))
+missing3_cor <- cor(select(missing3, -ID_PACIENTE, -tbqact2015, -antecedentetotal))
 library(corrplot)
-corrplot(missing4_cor, order = "hclust", tl.cex=0.6)
+corrplot(missing3_cor, order = "hclust", tl.cex=0.6)
 #Finding highly correlated variables
-highCorr <- findCorrelation(missing4_cor, cutoff = .75) #Solo MED_EVOL_PREQX y PREQX
-missing3$tbqact2015 <- make.names(missing3$tbqact2015)
+highCorr <- findCorrelation(missing3_cor, cutoff = .75) #Solo MED_EVOL_PREQX y PREQX
+missing4 <- select(missing3, -highCorr)
+missing4$tbqact2015 <- make.names(missing4$tbqact2015)
+
+missing5 <- filter(missing4, tbqact2015!='NA.') %>% select(-antecedentetotal)
+
+missing_NoRegTBQ_PCA <- filter(missing5, RegTBQ==0) %>% select(-RegTBQ, -MED_EVOL_UTIA)
+
+#PCA
+#Use screeplot to decide #of prcomp
+#Use algorithms with PCA
+PCA_full <- preProcess(select(missing5, -ID_PACIENTE, -tbqact2015), method = c("pca"))
+PCA_NoRegTBQ <- preProcess(select(missing_NoRegTBQ_PCA, -ID_PACIENTE, -tbqact2015), method = c("pca"))
+
+missing5_pca <- predict(PCA, missing5)
+PCA_missing <-princomp(select(missing5, -ID_PACIENTE, -tbqact2015))
+plot(PCA_missing, type = 'lines', npcs=50, main="Scree Plot for Principal Components vs Variance Explained")
+abline(h=0, col="red")
+summary(PCA_missing)
+
+missing_NoRegTBQ_PCA <- predict(PCA_NoRegTBQ, missing_NoRegTBQ_PCA)
+PCA_missing_NoRegTBQ_PCA <-princomp(select(missing_NoRegTBQ_PCA, -ID_PACIENTE, -tbqact2015))
+plot(PCA_missing_NoRegTBQ_PCA, type = 'lines', npcs=50, main="Scree Plot for Principal Components vs Variance Explained")
+abline(h=0, col="red")
+summary(PCA_missing)
 
 
-############
-#Boosted trees
-############
-tuneGrid.gbm5 <- expand.grid(n.trees=c(400,500,600,700),
-                             interaction.depth=c(3:7),
-                             shrinkage=c(0.1, 001, 0.0001),
-                             n.minobsinnode=c(10))
+ctrl <- trainControl(method="cv",   
+                     number=10,		    
+                     summaryFunction=twoClassSummary,
+                     classProbs=TRUE,
+                     verboseIter=T, 
+                     allowParallel=F)
 
-boostedTree.trctrl3 <- trainControl(method='cv', 
-                                    number=10, 
-                                    classProbs = T, 
-                                    summaryFunction = twoClassSummary, 
-                                    verboseIter=T,
-                                    allowParallel=F)
+grid.svm <- expand.grid(sigma=c(0.01,0.05,1),C=2)
 
 system.time(
-    gbm_missing <- train(data=filter(missing3, tbqact2015!='NA.'),
-                   tbqact2015~. -ID_PACIENTE,
-                   distribution='bernoulli',
-                   method='gbm',
-                   metric='ROC',
-                   trControl=boostedTree.trctrl3,
-                   tuneGrid=tuneGrid.gbm5,
-                   verbose=T)
+    svm.missing_pca <- train(data=select(missing5, -ID_PACIENTE),
+                             tbqact2015~.,
+                     method = "svmRadial",
+                     metric="ROC",
+                     tuneLength=5,
+                     trControl=ctrl,
+                     verbose=T)
 )
 
-plot(gbm_missing)
-varImp(gbm_missing)
-#gbm_missing.test_results <- predict(gbm_missing, nozero_manual_grams_test)
-#confusionMatrix(gbm_missing.test_results, nozero_manual_grams_test$TBQ)
+svm_missing_pca_results <- predict(svm.missing_pca, missing_NoRegTBQ_PCA)
+confusionMatrix(svm_missing_pca_results, missing_NoRegTBQ_PCA$tbqact2015)
+
+
 
 ###
 #SVM
@@ -668,8 +657,8 @@ ctrl <- trainControl(method="cv",
                      verboseIter=T, 
                      allowParallel=F)
 system.time(
-    svm.tune <- train(data=filter(missing3, tbqact2015!='NA.'),
-                      tbqact2015~. -ID_PACIENTE,
+    svm.tune <- train(data=filter(missing3, tbqact2015!=NA) %>% select(-ID_PACIENTE, -tbqact2015),
+                      make.names(fumoalgunavez)~.,
                       method = "svmRadial",
                       metric="Accuracy",
                       tuneLength = 9,
