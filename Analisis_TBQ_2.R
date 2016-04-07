@@ -580,7 +580,7 @@ algunavez3$fumoalgunavez <- as.numeric(algunavez3$fumoalgunavez)
 algunavez3$fumoalgunavez <- make.names(algunavez3$fumoalgunavez)
 missing3 <- full_join(missing3, algunavez3, by='ID_PACIENTE')
 missing3$fumoalgunavez[is.na(missing3$fumoalgunavez)] <- 'X0'
-missing3 <- make.names(missing3$tbqact2015)
+missing3$tbqact2015 <- make.names(missing3$tbqact2015)
 
 #Analyzing frequencies
 freq_missing3 <- colSums(missing3, na.rm = T)
@@ -591,26 +591,23 @@ sum(freq_missing3 > 0) #No 0 columns
 #missing4 <- select(missing3, -nzvarmissing)
 
 #Analyzing correlation
-missing3_cor <- cor(select(missing3, -ID_PACIENTE, -tbqact2015, -antecedentetotal))
+missing3_cor <- cor(select(missing3, -ID_PACIENTE, -tbqact2015, -antecedentetotal, -fumoalgunavez))
 library(corrplot)
 corrplot(missing3_cor, order = "hclust", tl.cex=0.6)
 #Finding highly correlated variables
 highCorr <- findCorrelation(missing3_cor, cutoff = .75) #Solo MED_EVOL_PREQX y PREQX
-missing4 <- select(missing3, -highCorr)
-missing4$tbqact2015 <- make.names(missing4$tbqact2015)
+missing4 <- select(missing3, -highCorr, -antecedentetotal)
 
-missing5 <- filter(missing4, tbqact2015!='NA.') %>% select(-antecedentetotal)
-
-missing_NoRegTBQ_PCA <- filter(missing5, RegTBQ==0) %>% select(-RegTBQ, -MED_EVOL_UTIA)
+missing_NoRegTBQ <- filter(missing4, RegTBQ==0) %>% select(-RegTBQ, -MED_EVOL_UTIA)
 
 #PCA
 #Use screeplot to decide #of prcomp
 #Use algorithms with PCA
-PCA_full <- preProcess(select(missing5, -ID_PACIENTE, -tbqact2015), method = c("pca"))
+PCA_full <- preProcess(select(missing4, -ID_PACIENTE, -tbqact2015, -fumoalgunavez), method = c("pca"))
 PCA_NoRegTBQ <- preProcess(select(missing_NoRegTBQ_PCA, -ID_PACIENTE, -tbqact2015), method = c("pca"))
 
-missing5_pca <- predict(PCA, missing5)
-PCA_missing <-princomp(select(missing5, -ID_PACIENTE, -tbqact2015))
+missing4_pca <- predict(PCA_full, missing4)
+PCA_missing <-princomp(select(missing4, -ID_PACIENTE, -tbqact2015, -fumoalgunavez))
 plot(PCA_missing, type = 'lines', npcs=50, main="Scree Plot for Principal Components vs Variance Explained")
 abline(h=0, col="red")
 summary(PCA_missing)
@@ -621,50 +618,92 @@ plot(PCA_missing_NoRegTBQ_PCA, type = 'lines', npcs=50, main="Scree Plot for Pri
 abline(h=0, col="red")
 summary(PCA_missing)
 
+missing4_pca <- filter(missing4_pca, fumoalgunavez!='NA.')
 
 ctrl <- trainControl(method="cv",   
-                     number=10,		    
+                     number=8,
+                     repeats=3,
                      summaryFunction=twoClassSummary,
                      classProbs=TRUE,
                      verboseIter=T, 
                      allowParallel=F)
 
-grid.svm <- expand.grid(sigma=c(0.01,0.05,1),C=2)
-
 system.time(
-    svm.missing_pca <- train(data=select(missing5, -ID_PACIENTE),
+    svm.missing_pca <- train(data=select(missing4_pca, -ID_PACIENTE, -tbqact2015, -(PC20:PC43)),
+                             fumoalgunavez~.,
+                             method = "svmRadial",
+                             metric="ROC",
+                             tuneLength=9,
+                             trControl=ctrl,
+                             verbose=T)
+)
+
+svm_missing_pca_results <- predict(svm.missing_pca, missing4_pca)
+confusionMatrix(svm_missing_pca_results, missing4_pca$fumoalgunavez)
+
+########
+#NN
+########
+
+nnet.missing <- train(data=select(missing4_pca, -ID_PACIENTE, -tbqact2015, -(PC20:PC43)),
+                      fumoalgunavez~.,
+                   method = "nnet",
+                   metric="ROC",
+                   trControl=ctrl,
+                   tuneLength=5,
+                   verbose=T)
+
+plot(nnet.missing)
+nnet.missing_results <- predict(nnet.missing, missing4_pca)
+confusionMatrix(nnet.missing_results, missing4_pca$fumoalgunavez)
+
+
+############
+#GBM
+############
+
+    gbm.missing <- train(data=select(missing4_pca, -ID_PACIENTE, -tbqact2015, -(PC20:PC43)),
+                         fumoalgunavez~.,
+                   distribution='bernoulli',
+                   method='gbm',
+                   metric='ROC',
+                   trControl=ctrl,
+                   tuneLength=5,
+                   verbose=T)
+    
+    gbm.missing_results <- predict(gbm.missing, missing4_pca)
+    confusionMatrix(gbm.missing_results, missing4_pca$fumoalgunavez)
+    
+#############
+#RF
+#############
+    
+    mtry_missing <- expand.grid(mtry=c(sqrt(19)*3))
+    
+    rf.missing <- train(data=select(missing4_pca, -ID_PACIENTE, -tbqact2015, -(PC20:PC43)),
+                        fumoalgunavez~.,
+                                     method='parRF',
+                                     trControl=ctrl,
+                                     tuneGrid=mtry_missing,
+                                     metric='ROC',
+                                     maximize=T,
+                                     importance=T,
+                                     ntree=1000,
+                                     verbose=T
+    )
+    
+    rf.missing_results <- predict(rf.missing, missing4_pca)
+    confusionMatrix(rf.missing_results, missing4_pca$fumoalgunavez)
+
+    ensamble_missing <- select(missing4_pca, ID_PACIENTE, fumoalgunavez, tbqact2015, c(PC1:PC20))
+    ensamble_missing$RF_fumalguna <- predict(rf.missing, missing4_pca)
+    
+    svm.missing_pca_2015 <- train(data=select(ensamble_missing, -ID_PACIENTE, -fumoalgunavez, -RF_fumalguna) %>% filter(tbqact2015!='NA.'),
                              tbqact2015~.,
-                     method = "svmRadial",
-                     metric="ROC",
-                     tuneLength=5,
-                     trControl=ctrl,
-                     verbose=T)
-)
-
-svm_missing_pca_results <- predict(svm.missing_pca, missing_NoRegTBQ_PCA)
-confusionMatrix(svm_missing_pca_results, missing_NoRegTBQ_PCA$tbqact2015)
-
-
-
-###
-#SVM
-####
-
-ctrl <- trainControl(method="cv",   
-                     repeats=10,		    
-                     summaryFunction=multiClassSummary,	
-                     classProbs=TRUE,
-                     verboseIter=T, 
-                     allowParallel=F)
-system.time(
-    svm.tune <- train(data=filter(missing3, tbqact2015!=NA) %>% select(-ID_PACIENTE, -tbqact2015),
-                      make.names(fumoalgunavez)~.,
-                      method = "svmRadial",
-                      metric="Accuracy",
-                      tuneLength = 9,
-                      trControl=ctrl,
-                      verbose=T)
-)
-
-grid <- expand.grid(sigma =seq(0.0001,0.01, by=0.002),
-                    C =c(1,2,3))
+                             method = "svmRadial",
+                             metric="ROC",
+                             tuneLength=9,
+                             trControl=ctrl,
+                             verbose=T)
+    
+    #PROBAR CON UN TEST SET....
