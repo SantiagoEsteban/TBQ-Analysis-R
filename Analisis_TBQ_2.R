@@ -1,6 +1,7 @@
 # Import data
 #A gentle introduction to text mining using R
 library(readxl)
+library(ggplot2)
 library(tm)
 library(RTextTools)
 library(NLP)
@@ -38,9 +39,9 @@ corrplot(manual_grams_cor, order = "hclust", tl.cex=0.1, tl.pos = 'n')
 findCorrelation(manual_grams_cor, cutoff = .75) #no correlations above 0.75
 
 #Distance
-nozero_manual_grams.t <- t(select(nozero_manual_grams, -ID_PACIENTE, -TBQ, -pcolor))
+nozero_manual_grams.t <- t(select(nozero_manual_grams, -ID_PACIENTE, -TBQ, -pcolor, -notbqvar))
 d <- dist(nozero_manual_grams.t)
-plot(hclust(d))
+plot(hclust(d), cex=0.6, xlab="")
 heatmap(as.matrix(d))
 
 #MDS
@@ -482,6 +483,26 @@ system.time(
 0.978+c(-1,1)*qnorm(0.975)*0.003440324
 ensamble_training$Final <- predict(svm.blended.linear, ensamble_training)
 
+library(lubridate)
+#By year table
+ensamble_training_year <- ensamble_training %>% filter(FECHA >= '2000/1/1' & Final!='X9') %>%
+    group_by(ID_PACIENTE) %>% mutate(t=rank(FECHA, ties.method='random'))
+ensamble_training_year$FECHA <- floor_date(ensamble_training_year$FECHA, unit='year')
+ensamble_training_year <- group_by(ensamble_training_year, ID_PACIENTE, FECHA) %>% filter(t==max(t))
+ensamble_training_year <- select(ensamble_training_year, ID_PACIENTE, Final,FECHA) %>% 
+    spread(FECHA, Final)
+
+Ids2015 <- c(17045, 16587,18455, 19715, 20382, 69811)
+
+ggplot(filter(ensamble_training, ID_PACIENTE%in%Ids2015 & Final!='X9'), aes(x=FECHA, y=Final, group=as.factor(ID_PACIENTE), color=as.factor(ID_PACIENTE))) + 
+    geom_point() + 
+    geom_line(size=1) + 
+    guides(color=FALSE) + 
+    theme_gray() + 
+    facet_wrap(~ID_PACIENTE, scale='free') +
+    xlab('Time') + ylab('Smoking Status')
+
+
 
 
 ####TRY PCA
@@ -495,6 +516,9 @@ plot(princomp(select(nozero_manual_grams, -ID_PACIENTE, -TBQ)),
      main="Scree Plot for Principal Components vs Variance Explained")
 abline(h=0, col="red")
 
+ggplot(nozero_manual_grams_pca, aes(PC1, PC2, color=TBQ)) + geom_point()
+ggplot(nozero_manual_grams_pca, aes(PC2, PC3, color=TBQ)) + geom_point()
+ggplot(nozero_manual_grams_pca, aes(PC3, PC4, color=TBQ)) + geom_point()
 
 #Probar con las 6000 marginales de los ptes de 2015 (TBQ - Training - evol marginales - pma0719336_evol_rnd6000_tbq)
 marginal2015 <- as.data.frame(read_excel('TBQ - Training - evol marginales - pma0719336_evol_rnd6000_tbq_var.xlsx'))
@@ -540,7 +564,7 @@ ensamble_postscreening2005_wide <- select(ensamble_postscreening2005_t, ID_PACIE
 #Wide results by year
 library(lubridate)
 #By year table
-ensamble_postscreening2005_year <- ensamble_postscreening2005 %>% filter(FECHA >= '2000/1/1' & final!='X9') %>%
+ensamble_postscreening2005_year <- ensamble_postscreening2005 %>% filter(FECHA >= '2000/1/1' & Final!='X9') %>%
     group_by(ID_PACIENTE) %>% mutate(t=rank(FECHA, ties.method='random'))
 ensamble_postscreening2005_year$FECHA <- floor_date(ensamble_postscreening2005_year$FECHA, unit='year')
 ensamble_postscreening2005_year <- group_by(ensamble_postscreening2005_year, ID_PACIENTE, FECHA) %>% filter(t==max(t))
